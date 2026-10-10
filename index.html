@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F6F5C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Finanzas">
+<title>Finanzas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" href="bricolage.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+  @font-face { font-family: "Bricolage"; src: url("bricolage.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+  :root {
+    --bg: #EDF1EE; --card: #FFFFFF; --card2: #F4F7F5; --ink: #14211D; --muted: #5E6E68; --line: #DCE4E0;
+    --pri: #1F6F5C; --pri-2: #2A8C74; --pri-weak: #DDEFE8; --on-pri: #FFFFFF;
+    --debt: #CF4B31; --debt-weak: #FBE6E0; --sun: #B87A0B; --sun-bar: #E9A21F; --sun-weak: #FCF1D9; --ok: #1F8A55;
+    --shadow: 0 1px 2px rgba(20, 50, 40, .05), 0 6px 18px rgba(20, 50, 40, .05);
+    --nav-h: 66px; --disp: "Bricolage", -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0E1513; --card: #16201D; --card2: #1C2824; --ink: #E7EFEB; --muted: #93A59E; --line: #26332F;
+      --pri: #4FBF9C; --pri-2: #6FD3B2; --pri-weak: #173229; --on-pri: #06130F;
+      --debt: #FF7A5E; --debt-weak: #3A1D16; --sun: #F4BF55; --sun-bar: #F4BF55; --sun-weak: #352A12; --ok: #4ADE80;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 16px/1.4 -apple-system, "Segoe UI", Roboto, Arial, sans-serif; padding-top: env(safe-area-inset-top); }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
+  .hide { display: none !important; }
+  .num { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 520px; margin: 0 auto; padding: 10px 16px calc(var(--nav-h) + 40px + env(safe-area-inset-bottom)); }
+
+  /* Encabezado */
+  .top { display: flex; justify-content: space-between; align-items: center; margin: 4px 0 6px; min-height: 36px; }
+  .top h1 { font: 700 22px/1.1 var(--disp); letter-spacing: -.02em; margin: 0; }
+  .sync { font-size: 12px; padding: 5px 10px; border-radius: 99px; background: var(--card2); color: var(--muted); white-space: nowrap; border: 0; }
+  .sync.pend { background: var(--sun-weak); color: var(--sun); font-weight: 700; }
+  .sync.ok { background: var(--pri-weak); color: var(--pri); }
+
+  /* Héroe del inicio */
+  .hero { padding: 14px 2px 18px; }
+  .hero .lbl { color: var(--muted); font-size: 15px; }
+  .hero .big { font: 750 46px/1.05 var(--disp); letter-spacing: -.035em; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+  .hero .big.neg { color: var(--debt); }
+  .hero .of { color: var(--muted); font-size: 14px; }
+  .meter { height: 10px; background: var(--card2); border-radius: 99px; overflow: hidden; margin: 12px 0 8px; position: relative; }
+  .meter > div { height: 100%; border-radius: 99px; background: var(--pri); }
+  .meter > div.warn { background: var(--sun-bar); }
+  .meter > div.over { background: var(--debt); }
+  .meter .today { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .35; border-radius: 2px; }
+  .legend { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+
+  /* Tarjetas */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  .card.flat { box-shadow: none; background: var(--card2); }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .between { justify-content: space-between; }
+  .muted { color: var(--muted); font-size: 13.5px; }
+  .t1 { font-weight: 700; font-size: 16px; }
+  .amt { font: 700 22px/1.15 var(--disp); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .amt.sm { font-size: 18px; }
+  .red { color: var(--debt); } .green { color: var(--ok); } .amber { color: var(--sun); }
+  h2 { font: 700 17px/1.2 var(--disp); margin: 22px 2px 10px; letter-spacing: -.01em; }
+  h2 .more { float: right; font: 600 14px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--pri); background: none; border: 0; padding: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+  .stat .muted { font-size: 12.5px; }
+  .note { font-size: 13.5px; padding: 11px 13px; border-radius: 14px; background: var(--sun-weak); color: var(--sun); margin-bottom: 10px; line-height: 1.35; }
+  .note.red { background: var(--debt-weak); color: var(--debt); }
+  .note b { font-weight: 700; }
+
+  /* Deuda */
+  .debt-head { display: flex; justify-content: space-between; align-items: baseline; }
+  .debt-list { margin-top: 12px; display: grid; gap: 8px; }
+  .debt-item { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 14px; }
+  .debt-item .bar { grid-column: 1 / -1; height: 5px; background: var(--card2); border-radius: 99px; overflow: hidden; }
+  .debt-item .bar div { height: 100%; background: var(--debt); opacity: .75; border-radius: 99px; }
+
+  /* Botones */
+  .btn { border: 0; border-radius: 14px; padding: 14px 16px; font-weight: 700; font-size: 16px; background: var(--pri); color: var(--on-pri); }
+  .btn.ghost { background: var(--card2); color: var(--ink); border: 1px solid var(--line); font-weight: 600; }
+  .btn.danger { background: transparent; color: var(--debt); border: 1px solid var(--debt-weak); font-weight: 600; }
+  .btn.sm { padding: 8px 12px; font-size: 14px; border-radius: 11px; }
+  .btn.block { width: 100%; }
+  .btn:disabled { opacity: .45; }
+
+  /* Movimientos */
+  .day { margin: 18px 2px 6px; display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .list { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
+  .mv { display: flex; align-items: center; gap: 12px; padding: 12px 14px; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); }
+  .mv:first-child { border-top: 0; }
+  .mv .ic { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: var(--card2); font-size: 19px; flex: none; }
+  .mv .tx { flex: 1; min-width: 0; }
+  .mv .d1 { font-weight: 650; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mv .d2 { color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mv .m { font: 650 16px/1.2 var(--disp); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mv .m.in { color: var(--ok); } .mv .m.tr { color: var(--muted); }
+  .mv .pend { display: inline-block; width: 7px; height: 7px; border-radius: 9px; background: var(--sun-bar); margin-left: 5px; vertical-align: middle; }
+  .empty { text-align: center; color: var(--muted); padding: 28px 16px; font-size: 14.5px; }
+
+  /* Filtros y meses */
+  .monthbar { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 12px; }
+  .monthbar .nm { font: 700 19px/1.2 var(--disp); text-transform: capitalize; }
+  .arrow { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; }
+  .arrow:disabled { opacity: .35; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; border: 1.5px solid var(--line); background: var(--card); border-radius: 99px; padding: 8px 14px; font-weight: 600; font-size: 14.5px; }
+  .chip.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .search { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); margin-bottom: 10px; font-size: 16px; }
+  .search:focus { outline: none; border-color: var(--pri); }
+
+  /* Presupuesto */
+  .cat { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 13px 14px; }
+  .cat:first-child { border-top: 0; }
+  .cat .top2 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .cat .nm { font-weight: 650; font-size: 15px; }
+  .cat .meter { height: 7px; margin: 8px 0 5px; }
+  .cat .sub { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+
+  /* Cuentas */
+  .acc { display: flex; align-items: center; gap: 12px; padding: 14px; border-top: 1px solid var(--line); }
+  .acc:first-child { border-top: 0; }
+  .acc .tx { flex: 1; min-width: 0; }
+  .acc .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+
+  /* Navegación */
+  nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; height: calc(var(--nav-h) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+             background: var(--card); border-top: 1px solid var(--line); display: grid; grid-template-columns: 1fr 1fr 76px 1fr 1fr; z-index: 20; }
+  nav.tabs button { background: none; border: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+  nav.tabs button.on { color: var(--pri); }
+  nav.tabs svg { width: 23px; height: 23px; }
+  nav.tabs .fab { position: relative; }
+  nav.tabs .fab span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); width: 60px; height: 60px; border-radius: 20px; background: var(--pri); color: var(--on-pri);
+                       display: grid; place-items: center; box-shadow: 0 6px 18px rgba(31, 111, 92, .35); }
+  nav.tabs .fab svg { width: 28px; height: 28px; }
+
+  /* Hoja inferior (registrar, editar) */
+  .scrim { position: fixed; inset: 0; background: rgba(8, 16, 13, .45); z-index: 40; opacity: 0; transition: opacity .2s; }
+  .scrim.show { opacity: 1; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; background: var(--bg); border-radius: 24px 24px 0 0; max-height: 92vh; overflow-y: auto;
+           padding: 8px 16px calc(18px + env(safe-area-inset-bottom)); transform: translateY(100%); transition: transform .25s cubic-bezier(.2,.8,.2,1); max-width: 560px; margin: 0 auto; }
+  .sheet.show { transform: none; }
+  .grab { width: 40px; height: 5px; border-radius: 9px; background: var(--line); margin: 4px auto 10px; }
+  .sheet h3 { font: 700 20px/1.2 var(--disp); margin: 2px 0 12px; }
+  .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--card2); border: 1px solid var(--line); border-radius: 14px; padding: 4px; gap: 4px; margin-bottom: 14px; }
+  .seg button { border: 0; background: none; border-radius: 10px; padding: 9px 4px; font-weight: 650; font-size: 14px; color: var(--muted); }
+  .seg button.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
+  .amount { display: flex; align-items: center; gap: 6px; background: var(--card); border: 1.5px solid var(--line); border-radius: 18px; padding: 8px 16px; margin-bottom: 14px; }
+  .amount:focus-within { border-color: var(--pri); }
+  .amount span { font: 700 34px/1 var(--disp); color: var(--muted); }
+  .amount input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font: 750 40px/1.2 var(--disp); letter-spacing: -.03em; font-variant-numeric: tabular-nums; padding: 4px 0; }
+  .fl { font-size: 13px; font-weight: 700; color: var(--muted); margin: 12px 2px 7px; }
+  .pick { display: flex; flex-wrap: wrap; gap: 7px; }
+  .pick button { border: 1.5px solid var(--line); background: var(--card); border-radius: 12px; padding: 8px 11px; font-size: 14px; font-weight: 600; }
+  .pick button.on { border-color: var(--pri); background: var(--pri-weak); color: var(--pri); }
+  .pick button.debtacc.on { border-color: var(--debt); background: var(--debt-weak); color: var(--debt); }
+  .inp { width: 100%; padding: 13px 14px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); font-size: 16px; }
+  .inp:focus { outline: none; border-color: var(--pri); }
+  .datewrap { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+  .datewrap input[type=date] { padding: 8px 10px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); font-size: 14px; }
+  .hint { font-size: 13px; color: var(--muted); margin: 8px 2px 0; line-height: 1.35; }
+  .actbar { display: flex; gap: 8px; margin: 18px -16px 0; padding: 10px 16px 4px; position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom)); background: var(--bg); padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .actbar .btn { flex: 1; }
+
+  /* Pantallas de carga y configuración */
+  .center { min-height: 70vh; display: grid; place-items: center; text-align: center; color: var(--muted); }
+  .setup label { display: block; font-weight: 700; margin: 14px 0 6px; }
+  .toast { position: fixed; left: 50%; bottom: calc(var(--nav-h) + 22px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); background: var(--ink); color: var(--bg);
+           padding: 11px 16px; border-radius: 14px; font-size: 14.5px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .2s; z-index: 60; max-width: 90vw; width: max-content;
+           display: flex; gap: 14px; align-items: center; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .toast button { background: none; border: 0; color: var(--pri-2); font-weight: 800; padding: 0; }
+  @media (prefers-reduced-motion: reduce) { .sheet, .scrim, .toast { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1 id="titulo">Finanzas</h1><button id="sync" class="sync" onclick="enviar(true)">…</button></div>
+  <div id="loading" class="center"><div>Cargando tus cuentas…</div></div>
+  <div id="setup" class="setup hide">
+    <div class="card">
+      <div class="t1" style="font-size:18px">Conecta tu hoja</div>
+      <p class="muted">Pega la URL de la aplicación web de Apps Script (termina en /exec) y la clave que pusiste en el código.</p>
+      <label for="cfgApi">URL de Apps Script</label>
+      <input id="cfgApi" class="inp" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+      <label for="cfgKey">Clave</label>
+      <input id="cfgKey" class="inp" autocomplete="off">
+      <button class="btn block" style="margin-top:16px" onclick="guardarConfig()">Conectar</button>
+      <button class="btn ghost block" style="margin-top:8px" onclick="modoDemo()">Probar con datos de ejemplo</button>
+    </div>
+  </div>
+  <div id="view"></div>
+</div>
+
+<nav class="tabs hide" id="nav">
+  <button data-tab="Inicio" onclick="irA('Inicio')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+  <button data-tab="Movimientos" onclick="irA('Movimientos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Movimientos</button>
+  <button class="fab" aria-label="Registrar movimiento" onclick="abrirRegistro()"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></button>
+  <button data-tab="Presupuesto" onclick="irA('Presupuesto')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>Presupuesto</button>
+  <button data-tab="Cuentas" onclick="irA('Cuentas')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19M6.5 15h4"/></svg>Cuentas</button>
+</nav>
+
+<div id="scrim" class="scrim hide" onclick="cerrarHoja()"></div>
+<div id="sheet" class="sheet hide" role="dialog" aria-modal="true"></div>
+<div id="toast" class="toast" role="status"></div>
+<script src="app.js"></script>
+</body>
+</html>
