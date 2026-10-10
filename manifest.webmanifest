@@ -1,17 +1,33 @@
 {
+  "id": "./?app=finanzas-martin",
   "name": "Finanzas",
   "short_name": "Finanzas",
   "description": "Gastos, ingresos, deudas y presupuesto de Martin",
   "lang": "es-MX",
-  "start_url": "./",
+  "start_url": "./?app=finanzas-martin",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#EDF1EE",
   "theme_color": "#1F6F5C",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }
