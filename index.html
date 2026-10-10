@@ -218,6 +218,60 @@
   .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
   .toast button { background: none; border: 0; color: var(--pri-2); font-weight: 800; padding: 10px 0; min-height: 44px; }
   @media (prefers-reduced-motion: reduce) { .sheet, .scrim, .toast, .switch .knob, .switch .knob::after { transition: none; } }
+
+  /* v3 */
+  .seg.mini { display: inline-grid; width: auto; padding: 3px; margin: 0 0 12px; border-radius: 12px; }
+  .seg.mini button { padding: 6px 14px; min-height: 36px; font-size: 13.5px; }
+  .streak { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 6px 8px 6px 14px; margin: -4px 0 12px; font-size: 14.5px; min-height: 56px; }
+  .chev { color: var(--muted); font-size: 24px; line-height: 1; margin-left: 6px; flex: none; }
+  button.card { position: relative; }
+  button.card > .chev { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
+  button.card .debt-head, button.card > .muted { padding-right: 18px; }
+  .rowbtn { width: 100%; background: none; border: 0; border-top: 1px solid var(--line); text-align: left; min-height: 64px; }
+  .list .rowbtn:first-child { border-top: 0; }
+  .rowbtn .tx { display: flex; flex-direction: column; gap: 1px; }
+  .qrow { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14.5px; }
+  .card > .qrow:first-of-type { margin-top: 8px; }
+  .qrow b { white-space: nowrap; }
+  .qrow.tot { font-weight: 700; border-top: 2px solid var(--line); }
+  .wk { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .wk .sub { font-size: 12.5px; margin-top: 2px; }
+  .actgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+  .actgrid .btn { padding: 12px 6px; font-size: 14.5px; }
+  .chart { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart .bar { fill: var(--pri); opacity: .55; }
+  .chart .bar.cur { opacity: 1; }
+  .chart .bar.over { fill: var(--debt); }
+  .chart .vacio { fill: none; stroke: var(--line); stroke-dasharray: 3 3; }
+  .chart .ax { stroke: var(--line); stroke-width: 1; }
+  .chart .ref { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .chart .lb { font: 600 10.5px -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--muted); text-anchor: middle; }
+  .chart .ref-l { text-anchor: end; }
+  .chart .hit { fill: transparent; cursor: pointer; }
+  .chart .hit:focus { outline: none; fill: var(--pri-weak); fill-opacity: .5; }
+  .tip { margin-top: 8px; font-size: 13.5px; color: var(--muted); min-height: 38px; line-height: 1.38; }
+  .tip b { color: var(--ink); }
+  .tabla { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  .tabla th { text-align: left; color: var(--muted); font-weight: 700; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  .tabla td { padding: 7px 4px; border-bottom: 1px solid var(--line); }
+  .tabla td.num, .tabla th:not(:first-child) { text-align: right; }
+  .leyenda { display: flex; gap: 16px; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
+  .leyenda .sw { display: inline-block; width: 12px; height: 8px; border-radius: 3px; background: var(--pri); margin-right: 6px; }
+  .leyenda .tk { display: inline-block; width: 2px; height: 12px; background: var(--ink); margin-right: 6px; vertical-align: -2px; }
+  .hb { padding: 8px 0; font-size: 14px; }
+  .hbar { position: relative; height: 8px; background: var(--card2); border-radius: 99px; margin-top: 6px; }
+  .hbar > div { height: 100%; background: var(--pri); border-radius: 99px; }
+  .hbar > i { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); border-radius: 2px; }
+  .ideas { margin: 8px 0 0; padding-left: 18px; font-size: 14.5px; line-height: 1.45; }
+  .ideas li { margin-bottom: 8px; }
+  .guia { text-align: center; padding: 18px 4px 4px; }
+  .guia .gi { font-size: 56px; line-height: 1.1; }
+  .guia h3 { margin: 10px 0 8px; }
+  .guia p { font-size: 15.5px; line-height: 1.5; color: var(--ink); text-align: left; }
+  .dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
+  .dots i { width: 8px; height: 8px; border-radius: 9px; background: var(--line); }
+  .dots i.on { background: var(--pri); width: 22px; }
+  @media (max-width: 360px) { .actgrid { grid-template-columns: 1fr 1fr; } }
 </style>
 </head>
 <body>
@@ -243,7 +297,7 @@
   <button data-tab="Inicio" onclick="irA('Inicio')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
   <button data-tab="Movimientos" onclick="irA('Movimientos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Movimientos</button>
   <button class="fab" aria-label="Registrar movimiento" onclick="abrirRegistro()"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></button>
-  <button data-tab="Presupuesto" onclick="irA('Presupuesto')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>Presupuesto</button>
+  <button data-tab="Análisis" onclick="irA('Análisis')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Análisis</button>
   <button data-tab="Cuentas" onclick="irA('Cuentas')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19M6.5 15h4"/></svg>Cuentas</button>
 </nav>
 

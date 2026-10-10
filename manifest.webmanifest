@@ -29,5 +29,43 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Registrar gasto",
+      "short_name": "Gasto",
+      "url": "./?accion=gasto",
+      "icons": [
+        {
+          "src": "sc-gasto.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Pagar tarjeta",
+      "short_name": "Pagar",
+      "url": "./?accion=pagar",
+      "icons": [
+        {
+          "src": "sc-pagar.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Cuadrar cuentas",
+      "short_name": "Cuadrar",
+      "url": "./?accion=cuadrar",
+      "icons": [
+        {
+          "src": "sc-cuadrar.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
