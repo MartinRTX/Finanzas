@@ -1,4 +1,4 @@
-/* Finanzas v2.0 – app instalable de Martin.
+/* Finanzas v4.0 – app instalable de Martin (PWA y APK de Android con Capacitor).
  * Lee y escribe la hoja "Mis finanzas 2026" a través de Apps Script (la "API").
  * Lo que registras se guarda primero en el celular y se sube en cuanto hay señal.
  * Pestañas de la hoja: Registro, Cuentas, Categorías, Personas, Fijos y Config.
@@ -75,7 +75,16 @@ function toast(msg, accion) {
   t._h = setTimeout(() => { t.className = 'toast'; toastFn = null; }, accion ? 5500 : 2600);
 }
 function usarToast() { const f = toastFn; $('toast').className = 'toast'; toastFn = null; if (f) f(); }
-function vibrar(ms) { try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {} }
+/* ----- App nativa (APK con Capacitor): mismos archivos; dentro del APK usa el motor háptico y notificaciones reales ----- */
+const NATIVO = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function nativo(plugin, metodo, opts) {
+  try { return window.Capacitor.nativePromise(plugin, metodo, opts || {}).catch(() => null); } catch (e) { return Promise.resolve(null); }
+}
+// Un número: toque ligero (o medio si es 15+). Un patrón: aviso de error.
+function vibrar(ms) {
+  if (NATIVO) { if (Array.isArray(ms)) nativo('Haptics', 'notification', { type: 'ERROR' }); else nativo('Haptics', 'impact', { style: (ms || 12) >= 15 ? 'MEDIUM' : 'LIGHT' }); return; }
+  try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {}
+}
 
 const ICONO = {
   'Comida y antojos': '🌮', 'Salidas': '🎉', 'Gasolina': '⛽', 'Carro': '🚗', 'Familia y casa': '🏠',
@@ -84,6 +93,30 @@ const ICONO = {
   'Sueldo': '💼', 'Bonos y apoyos': '🎁', 'Trabajos extra': '🧾', 'Regalos y familia': '💝', 'Rendimientos': '📈', 'Otro ingreso': '💵'
 };
 const emo = s => s ? '<span aria-hidden="true">' + s + '</span> ' : '';
+// Color de cada categoría (iconos de los movimientos)
+const COLOR = {
+  'Comida y antojos': '#F59E0B', 'Salidas': '#EC4899', 'Gasolina': '#EF4444', 'Carro': '#64748B', 'Familia y casa': '#10B981',
+  'Salud y cuidado personal': '#06B6D4', 'Suscripciones y seguros': '#8B5CF6', 'Gustos y compras': '#F472B6', 'Viajes': '#3B82F6',
+  'Intereses y comisiones': '#B45309', 'Otros': '#94A3B8',
+  'Sueldo': '#22C55E', 'Bonos y apoyos': '#84CC16', 'Trabajos extra': '#14B8A6', 'Regalos y familia': '#F43F5E', 'Rendimientos': '#0EA5E9', 'Otro ingreso': '#22C55E'
+};
+function colorMov(m) {
+  if (m.tipo === 'Traspaso') return '#7C8A94';
+  if (m.tipo === 'Ajuste') return '#A1A1AA';
+  if (esPersonaTipo(m.tipo)) return '#6366F1';
+  return COLOR[m.categoria] || '#94A3B8';
+}
+// Cada cuenta se pinta como su plástico: Oro dorada, BBVA azul, Revolut grafito, Mercado Pago celeste…
+function estiloCuenta(c) {
+  const n = c.nombre.toLowerCase();
+  if (/oro|gold/.test(n)) return 'oro';
+  if (/bbva/.test(n)) return 'bbva';
+  if (/revolut/.test(n)) return 'revolut';
+  if (/mercado/.test(n)) return 'mp';
+  if (/\bnu\b/.test(n)) return 'nu';
+  return { 'Débito': 'deb', 'Ahorro': 'aho', 'Efectivo': 'efe', 'Crédito': 'cred', 'Préstamo': 'pres' }[c.tipo] || 'deb';
+}
+const ICONO_CUENTA = { 'Débito': '💳', 'Ahorro': '🐷', 'Efectivo': '💵', 'Crédito': '💳', 'Préstamo': '🏦' };
 const TIPOS_PERSONA = ['Presté', 'Me pagaron', 'Me prestaron', 'Le pagué'];
 const esPersonaTipo = t => TIPOS_PERSONA.indexOf(t) >= 0;
 const ACCION_PERSONA = { 'Presté': 'Le presté', 'Me pagaron': 'Me pagó', 'Me prestaron': 'Me prestó', 'Le pagué': 'Le pagué' };
@@ -98,7 +131,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '3.0';
+const VERSION_APP = '4.0';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -295,7 +328,7 @@ async function actualizar(avisar) {
   try {
     BASE = normalizar(await apiData());
     LS.set('fin_base', BASE); LS.set('fin_ultima', Date.now());
-    recalcular(); pintar();
+    recalcular(); pintar(); programarAvisos();
     if (avisar === true) toast('Actualizado ✓');
   } catch (e) {
     if (!DATA) {
@@ -306,10 +339,11 @@ async function actualizar(avisar) {
 }
 
 /* ===================== Cálculos ===================== */
-function saldo(c) {
+// Con `hasta` (yyyy-mm-dd) da el saldo al final de ese día.
+function saldo(c, hasta) {
   let s = c.saldoCorte;
   DATA.movs.forEach(m => {
-    if (m.fecha < c.fechaCorte) return;
+    if (m.fecha < c.fechaCorte || (hasta && m.fecha > hasta)) return;
     if (m.cuenta === c.nombre) {
       if (m.tipo === 'Ingreso' || m.tipo === 'Reembolso' || m.tipo === 'Ajuste' || m.tipo === 'Me pagaron' || m.tipo === 'Me prestaron') s += m.monto;
       else s -= m.monto;   // Gasto, Traspaso (sale), Presté, Le pagué
@@ -371,6 +405,46 @@ function proximoDia(dia) {
   }
   return null;
 }
+const proximaFecha = dia => { const d = proximoDia(dia); return d === null ? null : sumarDias(hoy(), d); };
+
+/* ---- Tarjetas de crédito: corte, fecha límite y financiamiento ---- */
+const conDia = (mk, d) => mk + '-' + pad(Math.min(d, diasDelMes(mk)));
+// Una compra entra al siguiente corte (el día del corte cuenta) y se paga en la fecha límite que sigue a ese corte.
+function cicloTarjeta(c, fecha) {
+  if (!c || !c.diaCorte || !c.diaPago) return null;
+  let corte = conDia(fecha.slice(0, 7), c.diaCorte);
+  if (corte < fecha) corte = conDia(mesSig(fecha.slice(0, 7), 1), c.diaCorte);
+  let pago = conDia(corte.slice(0, 7), c.diaPago);
+  if (pago <= corte) pago = conDia(mesSig(corte.slice(0, 7), 1), c.diaPago);
+  return { corte, pago, dias: difDias(fecha, pago), mejor: sumarDias(corte, 1) };
+}
+// El corte más reciente que ya pasó (el de hoy todavía no cierra)
+function ultimoCorte(c) {
+  if (!c.diaCorte) return null;
+  const mk = hoy().slice(0, 7), k = conDia(mk, c.diaCorte);
+  return k < hoy() ? k : conDia(mesSig(mk, -1), c.diaCorte);
+}
+// Lo que falta pagar del último estado de cuenta para no generar intereses.
+// Es aproximado: sale de lo registrado y no separa compras a meses sin intereses.
+function pagoSinIntereses(c) {
+  const k = ultimoCorte(c), ci = k && cicloTarjeta(c, k);
+  if (!ci || k < c.fechaCorte || ci.pago < hoy()) return null;
+  const alCorte = Math.max(0, -saldo(c, k));
+  const pagado = DATA.movs.filter(m => m.tipo === 'Traspaso' && m.aCuenta === c.nombre && m.fecha > k).reduce((s, m) => s + m.monto, 0);
+  return { corte: k, limite: ci.pago, total: r2(alCorte), falta: r2(Math.max(0, alCorte - pagado)) };
+}
+function htmlFinanciamiento(c, fecha, monto) {
+  const ci = cicloTarjeta(c, fecha);
+  let h = '<div class="finan" role="note"><span class="finan-ic" aria-hidden="true">💳</span><div>';
+  if (ci) {
+    h += 'Entra al corte del <b>' + fechaCorta(ci.corte) + '</b> y la pagas hasta el <b>' + fechaCorta(ci.pago) + '</b>: <b>' + ci.dias + ' días</b> de financiamiento sin intereses si pagas el total.';
+    const max = cicloTarjeta(c, ci.mejor).dias;
+    if (ci.dias < 25 && max - ci.dias >= 15) h += '<div class="muted" style="margin-top:4px">Si es algo grande y puede esperar, cómpralo el ' + fechaCorta(ci.mejor) + ': tendrías ' + max + ' días.</div>';
+  } else h += 'Pon el día de corte y de pago de ' + esc(c.nombre) + ' (Cuentas → ' + esc(c.nombre) + ' → Editar) y te digo cuántos días de financiamiento te da cada compra.';
+  if (monto > 0) h += '<div class="muted" style="margin-top:4px">Tu deuda en ' + esc(c.nombre) + ' quedaría en ' + money(-saldo(c) + monto - (FORM && FORM.id ? montoOriginal() : 0)) + '.</div>';
+  return h + '</div></div>';
+}
+
 // Pagos fijos del mes que todavía no registras
 function fijosPendientes(mk) {
   const usados = new Set(DATA.movs.filter(m => m.fijo && m.fecha.slice(0, 7) === mk).map(m => m.fijo));
@@ -421,7 +495,10 @@ function arrancar() {
   ACCION = p.get('accion') || null;       // accesos directos del ícono: gasto, pagar, cuadrar
   if (p.toString()) history.replaceState(null, '', location.pathname);
   history.replaceState({ base: true }, '');
-  window.addEventListener('popstate', () => { if (FORM) cerrarHojaReal(); });
+  ponerGuardia();
+  window.addEventListener('popstate', alIrAtras);
+  aplicarTema(LS.get('fin_tema', 'auto'));
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => aplicarTema(LS.get('fin_tema', 'auto'))); } catch (e) {}
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     const tenia = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -442,11 +519,28 @@ function arrancar() {
   window.addEventListener('offline', pintarSync);
   window.addEventListener('pagehide', guardarBorrador);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') { guardarBorrador(); return; }
+    if (document.visibilityState === 'hidden') { guardarBorrador(); programarAvisos(); return; }
     enviar(); if (!FORM) actualizar();
   });
   setInterval(enviar, 30000);
   setInterval(pintarSync, 60000);
+}
+// Siempre queda una entrada extra en el historial (la "guardia"): el gesto atrás cierra la hoja abierta o regresa a Inicio,
+// y en Inicio hay que hacerlo dos veces seguidas para salir (en el APK la app se va al fondo).
+let ATRAS_T = 0;
+function ponerGuardia() { if (!(history.state && (history.state.guardia || history.state.hoja))) history.pushState({ guardia: 1 }, ''); }
+function alIrAtras() {
+  if (FORM) { cerrarHojaReal(); return; }
+  if (history.state && (history.state.guardia || history.state.hoja)) return;
+  if (TAB !== 'Inicio') { irA('Inicio'); ponerGuardia(); return; }
+  if (Date.now() - ATRAS_T < 2200) {
+    ATRAS_T = 0;
+    if (NATIVO) { nativo('App', 'minimizeApp'); ponerGuardia(); } else history.back();
+    return;
+  }
+  ATRAS_T = Date.now();
+  toast('Desliza atrás otra vez para salir');
+  ponerGuardia();
 }
 function ejecutarAccion() {
   if (!ACCION || !DATA) return;
@@ -459,8 +553,14 @@ function mostrarSetup() {
   $('loading').classList.add('hide'); $('view').innerHTML = ''; $('nav').classList.add('hide');
   $('setup').classList.remove('hide');
   $('cfgApi').value = API || ''; $('cfgKey').value = KEY || '';
+  $('cfgCancel').classList.toggle('hide', !DATA);
 }
 function guardarConfigConexion() {
+  // Si pegas el link completo (…?api=…&k=…) en la casilla de la URL, se toman los dos datos de ahí
+  const pegado = $('cfgApi').value.trim();
+  if (/[?&]api=/.test(pegado)) {
+    try { const u = new URL(pegado); $('cfgApi').value = u.searchParams.get('api') || ''; $('cfgKey').value = u.searchParams.get('k') || $('cfgKey').value; } catch (e) {}
+  }
   const a = $('cfgApi').value.trim(), k = $('cfgKey').value.trim();
   if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(a) || !k) return toast('Revisa la URL y la clave');
   if (DEMO) { LS.del('fin_queue'); LS.del('fin_base'); }
@@ -490,8 +590,11 @@ function pintar() {
 function avisos(r) {
   const lista = [];
   DATA.cuentas.filter(c => esDeuda(c) && c.diaPago && !c.archivada).forEach(c => {
-    const d = proximoDia(c.diaPago), s = saldo(c);
-    if (d !== null && d <= 5 && s < 0) lista.push({ p: 0, cls: 'red', h: '<b>' + esc(c.nombre) + ':</b> fecha límite de pago ' + (d === 0 ? 'hoy' : d === 1 ? 'mañana' : 'en ' + d + ' días') + '. Debes ' + money(-s) + '. <button class="linkbtn" onclick="abrirRegistro({tipo:\'Traspaso\',aCuenta:\'' + jsq(c.nombre) + '\'})">Registrar pago</button>' });
+    const d = proximoDia(c.diaPago), s = saldo(c), ps = pagoSinIntereses(c);
+    if (ps && ps.falta <= 0.5) return;      // ya pagaste lo del estado de cuenta
+    if (d !== null && d <= 5 && s < 0) lista.push({ p: 0, cls: 'red', h: '<b>' + esc(c.nombre) + ':</b> fecha límite de pago ' + (d === 0 ? 'hoy' : d === 1 ? 'mañana' : 'en ' + d + ' días') + '. ' +
+      (ps ? 'Paga <b>' + money(ps.falta) + '</b> para no generar intereses (debes ' + money(-s) + ' en total).' : 'Debes ' + money(-s) + '.') +
+      ' <button class="linkbtn" onclick="abrirRegistro({tipo:\'Traspaso\',aCuenta:\'' + jsq(c.nombre) + '\'' + (ps ? ',monto:' + ps.falta : '') + '})">Registrar pago</button>' });
   });
   const pasadas = [], cerca = [];
   catsGasto().forEach(c => {
@@ -627,6 +730,7 @@ function vistaInicio() {
 
   h += tarjetaRechazados();
   h += avisos(r);
+  h += tarjetaFinanciamiento();
 
   // Resumen del domingo (domingo: semana en curso; lunes: la que acaba de terminar)
   const dsem = new Date(hoy() + 'T12:00:00').getDay();
@@ -654,6 +758,24 @@ function vistaInicio() {
   h += ult.length ? '<div class="list">' + ult.map(filaMov).join('') + '</div>'
     : '<div class="list"><div class="empty">Aún no registras nada desde el corte.<br>Toca <b>+</b> cada vez que gastes o te paguen.</div></div>';
   return h;
+}
+
+/* Tu tarjeta para gastos: cuántos días de financiamiento te da hoy y cuándo cortar */
+function tarjetaFinanciamiento() {
+  const n = cuentaGastos(), c = n && DATA.cuentas.find(x => x.nombre === n);
+  if (!c || !esDeuda(c)) return '';
+  const ci = cicloTarjeta(c, hoy()), ps = pagoSinIntereses(c);
+  let h = '<button class="card fin-card" onclick="abrirDetalle(\'' + jsq(c.nombre) + '\')" aria-label="Ver ' + esc(c.nombre) + '">' +
+    '<div class="row"><span class="mini-plas ' + estiloCuenta(c) + '" aria-hidden="true"></span><span class="tx"><span class="muted">Tu tarjeta para gastos</span><span class="t1">' + esc(c.nombre) + '</span></span></div>';
+  if (ci) {
+    const dc = difDias(hoy(), ci.corte);
+    h += '<div class="fin-big"><span class="amt num">' + ci.dias + ' días</span><span class="muted">de financiamiento para lo que compres hoy: lo pagas hasta el ' + fechaCorta(ci.pago) + '.</span></div>' +
+      '<div class="qrow"><span>Próximo corte</span><b>' + (dc === 0 ? 'hoy' : dc === 1 ? 'mañana' : fechaCorta(ci.corte) + ' (en ' + dc + ' días)') + '</b></div>';
+    if (dc <= 3) h += '<div class="qrow"><span>Mejor día para compras grandes</span><b>' + fechaCorta(ci.mejor) + ' (' + cicloTarjeta(c, ci.mejor).dias + ' días)</b></div>';
+  } else h += '<p class="muted" style="margin:8px 0 0">Captura su día de corte y de pago para ver cuántos días de financiamiento te da.</p>';
+  if (ps && ps.falta > 0.5) h += '<div class="qrow"><span>Para no pagar intereses</span><b class="num">' + money(ps.falta) + ' antes del ' + fechaCorta(ps.limite) + '</b></div>';
+  else if (ps && ps.total > 0.5) h += '<div class="qrow"><span>Estado de cuenta del ' + fechaCorta(ps.corte) + '</span><b class="green">Pagado ✓</b></div>';
+  return h + '<span class="chev" aria-hidden="true">›</span></button>';
 }
 
 /* Plan de la quincena: cómo repartir lo que llega */
@@ -694,7 +816,7 @@ function filaMov(m) {
     if (m.tipo === 'Gasto') txt = '−' + money(m.monto); else { cls = ' in'; txt = '+' + money(m.monto); }
   }
   const t1 = esPersonaTipo(m.tipo) ? (m.persona + (m.desc ? ': ' + m.desc : '')) : (m.desc || (m.tipo === 'Traspaso' ? 'Traspaso' : m.tipo === 'Ajuste' ? 'Ajuste al cuadrar' : m.categoria));
-  return '<button class="mv" onclick="editarMov(\'' + jsq(m.id) + '\')"><span class="ic" aria-hidden="true">' + icono(m) + '</span>' +
+  return '<button class="mv" onclick="editarMov(\'' + jsq(m.id) + '\')"><span class="ic" style="--c:' + colorMov(m) + '" aria-hidden="true">' + icono(m) + '</span>' +
     '<span class="tx"><div class="d1">' + esc(t1) + (m._pend ? '<i class="pend" title="Sin subir"></i><span class="sr">sin subir</span>' : '') + '</div><div class="d2">' + esc(d2) + '</div></span>' +
     '<span class="m num' + cls + '">' + txt + (extra ? '<small>' + extra + '</small>' : '') + '</span></button>';
 }
@@ -917,7 +1039,7 @@ function vistaCuentas() {
     const s = saldo(c), deuda = esDeuda(c);
     let sub = c.tipo;
     if (deuda && c.diaPago) { const d = proximoDia(c.diaPago); sub += d === 0 ? ', pago hoy' : d === 1 ? ', pago mañana' : ', pago en ' + d + ' días'; }
-    return '<button class="acc rowbtn" onclick="abrirDetalle(\'' + jsq(c.nombre) + '\')"><span class="tx"><span class="t1">' + esc(c.nombre) + '</span><span class="muted">' + esc(sub) + '</span></span>' +
+    return '<button class="acc rowbtn" onclick="abrirDetalle(\'' + jsq(c.nombre) + '\')"><span class="aic ' + estiloCuenta(c) + '" aria-hidden="true">' + ICONO_CUENTA[c.tipo] + '</span><span class="tx"><span class="t1">' + esc(c.nombre) + '</span><span class="muted">' + esc(sub) + '</span></span>' +
       '<span class="amt sm num' + (deuda && s < 0 ? ' red' : '') + '">' + money(deuda ? -s : s) + '</span><span class="chev" aria-hidden="true">›</span></button>';
   };
   const filaP = x => {
@@ -928,8 +1050,8 @@ function vistaCuentas() {
   let h = '<div class="grid2" style="margin:12px 0 4px">' +
     '<div class="stat"><div class="muted">Disponible</div><div class="amt sm num">' + money(p.disp) + '</div></div>' +
     '<div class="stat"><div class="muted">Deuda con bancos</div><div class="amt sm red num">' + money(p.deuda) + '</div></div></div>';
+  h += '<h2>Tus tarjetas<button class="more" onclick="abrirPlan()">Plan de deuda</button></h2><div class="plastics" role="list">' + activas().filter(esDeuda).map(plastico).join('') + '</div>';
   h += '<h2>Tu dinero</h2><div class="list">' + activas().filter(c => !esDeuda(c)).map(fila).join('') + '</div>';
-  h += '<h2>Lo que debes a bancos<button class="more" onclick="abrirPlan()">Plan de deuda</button></h2><div class="list">' + activas().filter(esDeuda).map(fila).join('') + '</div>';
   h += '<p class="hint">Toca una cuenta para pagar, mover, cuadrar o ver su historial. Cuadra cada domingo.</p>';
   const ps = personasActivas().map(x => ({ x: x, s: saldoPersona(x) }));
   const teDeben = ps.filter(o => o.s > 0).sort((a, b) => b.s - a.s), lesDebes = ps.filter(o => o.s < 0).sort((a, b) => a.s - b.s), aMano = ps.filter(o => o.s === 0);
@@ -943,13 +1065,17 @@ function vistaCuentas() {
   if (archC.length || archP.length) h += '<details class="arch"><summary>Archivadas (' + (archC.length + archP.length) + ')</summary><div class="list">' +
     archC.map(c => '<button class="acc rowbtn" onclick="abrirCuenta(\'' + jsq(c.nombre) + '\')"><span class="tx"><span class="t1">' + esc(c.nombre) + '</span><span class="muted">' + esc(c.tipo) + '</span></span><span class="chev">›</span></button>').join('') +
     archP.map(x => '<button class="acc rowbtn" onclick="abrirPersona(\'' + jsq(x.nombre) + '\')"><span class="tx"><span class="t1">' + esc(x.nombre) + '</span><span class="muted">Persona</span></span><span class="chev">›</span></button>').join('') + '</div></details>';
-  const ver = BASE && BASE.version ? BASE.version : 1;
-  h += '<h2>Ayuda y conexión</h2><div class="card flat"><div class="muted">' + (DEMO ? 'Estás en modo ejemplo: nada se guarda en tu hoja.' :
-    'Conectada a ' + esc(BASE && BASE.hoja ? BASE.hoja : 'tu hoja de Google') + '. Última actualización: ' + haceCuanto(LS.get('fin_ultima', 0)) + '.') + '</div>' +
-    (!DEMO ? '<div class="muted" style="margin-top:4px">App v' + VERSION_APP + ' · Apps Script v' + ver + (ver < 3 ? ' <b class="red">(falta actualizar el código de Apps Script)</b>' : ' ✓') + '</div>' : '') +
-    '<div class="actions"><button class="btn sm ghost" onclick="abrirGuia()">Ver guía</button>' + (DEMO ? '<button class="btn sm" onclick="salirDemo()">Salir del modo ejemplo</button>' : '<button class="btn sm ghost" onclick="actualizar(true)">Actualizar ahora</button>') +
-    '<button class="btn sm ghost" onclick="mostrarSetup()">Cambiar conexión</button></div></div>';
+  h += '<button class="card row between" style="margin-top:20px" onclick="abrirAjustes()"><span><span class="t1">Ajustes</span><br><span class="muted">Tarjeta para gastos, tema, recordatorios, app Android y conexión</span></span><span class="chev" aria-hidden="true">›</span></button>';
   return h;
+}
+// Tarjeta de crédito o préstamo dibujada como plástico
+function plastico(c) {
+  const s = saldo(c), ci = cicloTarjeta(c, hoy()), d = c.diaPago ? proximoDia(c.diaPago) : null;
+  const pie = ci ? 'Pagas el ' + fechaCorta(proximaFecha(c.diaPago)) + ' · Corta el ' + fechaCorta(ci.corte) : d !== null ? 'Pago en ' + d + ' días' : c.tipo;
+  return '<button class="plas ' + estiloCuenta(c) + '" role="listitem" onclick="abrirDetalle(\'' + jsq(c.nombre) + '\')">' +
+    '<span class="plas-top"><span class="plas-nm">' + esc(c.nombre) + '</span>' + (c.nombre === cuentaGastos() ? '<span class="plas-tag">Para gastos</span>' : '<span class="plas-chip" aria-hidden="true"></span>') + '</span>' +
+    '<span class="plas-lbl">' + (s <= 0 ? 'Debes' : 'Saldo a favor') + '</span><span class="plas-amt num">' + money(Math.abs(s)) + '</span>' +
+    '<span class="plas-ft">' + esc(pie) + '</span></button>';
 }
 
 /* ---- Detalle de una cuenta: acciones e historial ---- */
@@ -966,8 +1092,14 @@ function hojaDetalle() {
   let h = titulo(esc(c.nombre));
   h += '<div class="card flat"><div class="muted">' + (deuda ? (s <= 0 ? 'Lo que debes' : 'Saldo a favor') : 'Saldo') + '</div><div class="amt num' + (deuda && s < 0 ? ' red' : '') + '" style="font-size:30px">' + money(deuda ? -s : s) + '</div>' +
     '<div class="muted">' + esc(det.join(', ')) + '</div><div class="muted">Al corte del ' + fechaCorta(c.fechaCorte) + ': ' + money(deuda ? -c.saldoCorte : c.saldoCorte) + '</div></div>';
+  const ps = deuda ? pagoSinIntereses(c) : null, ci = deuda ? cicloTarjeta(c, hoy()) : null;
+  if (ci) h += '<div class="card" style="margin-top:10px"><div class="qrow"><span>Lo que compres hoy lo pagas el</span><b>' + fechaCorta(ci.pago) + ' (' + ci.dias + ' días)</b></div>' +
+    '<div class="qrow"><span>Próximo corte</span><b>' + fechaCorta(ci.corte) + '</b></div>' +
+    (ps ? '<div class="qrow"><span>Estado de cuenta del ' + fechaCorta(ps.corte) + '</span><b class="num">' + money(ps.total) + '</b></div>' +
+      '<div class="qrow tot"><span>' + (ps.falta > 0.5 ? 'Para no pagar intereses, antes del ' + fechaCorta(ps.limite) : 'Pago sin intereses') + '</span><b class="num ' + (ps.falta > 0.5 ? 'red' : 'green') + '">' + (ps.falta > 0.5 ? money(ps.falta) : 'Listo ✓') + '</b></div>' +
+      '<div class="muted">Aproximado con lo que registras; tu banco puede separar compras a meses.</div>' : '') + '</div>';
   h += '<div class="actgrid">' +
-    (deuda ? '<button class="btn" onclick="abrirRegistro({tipo:\'Traspaso\',aCuenta:\'' + n + '\'})">Pagar</button>' : '<button class="btn" onclick="abrirRegistro({tipo:\'Traspaso\',cuenta:\'' + n + '\'})">Mover dinero</button>') +
+    (deuda ? '<button class="btn" onclick="abrirRegistro({tipo:\'Traspaso\',aCuenta:\'' + n + '\'' + (ps && ps.falta > 0.5 ? ',monto:' + ps.falta : '') + '})">Pagar</button>' : '<button class="btn" onclick="abrirRegistro({tipo:\'Traspaso\',cuenta:\'' + n + '\'})">Mover dinero</button>') +
     '<button class="btn ghost" onclick="abrirCuadrar(\'' + n + '\')">Cuadrar</button><button class="btn ghost" onclick="abrirCuenta(\'' + n + '\')">Editar</button></div>';
   h += '<div class="fl" style="margin-top:16px">Movimientos' + (movs.length > 30 ? ' (últimos 30 de ' + movs.length + ')' : '') + '</div>';
   h += movs.length ? '<div class="list">' + movs.slice(0, 30).map(filaMov).join('') + '</div>' : '<div class="list"><div class="empty">Sin movimientos desde el corte.</div></div>';
@@ -1019,7 +1151,7 @@ function cerrarHojaReal() {
 function pintarHoja() {
   if (!FORM) return;
   const f = { mov: hojaMov, cat: hojaCategoria, cuadrar: hojaCuadrar, cuenta: hojaCuenta, nuevaCuenta: hojaNuevaCuenta, persona: hojaPersona,
-              nuevaPersona: hojaNuevaPersona, fijo: hojaFijo, plan: hojaPlan, detalle: hojaDetalle, guia: hojaGuia }[FORM.vista];
+              nuevaPersona: hojaNuevaPersona, fijo: hojaFijo, plan: hojaPlan, detalle: hojaDetalle, guia: hojaGuia, ajustes: hojaAjustes }[FORM.vista];
   const a = document.activeElement, foco = a && a.id, sel = a && a.selectionStart, top = $('sheet').scrollTop;
   $('sheet').innerHTML = '<div class="grabzone" id="grab"><div class="grab"></div></div>' + f();
   $('sheet').scrollTop = top;
@@ -1082,10 +1214,21 @@ function cuentasPara(tipo, rol) {
   if (tipo === 'Traspaso') return rol === 'a' ? cs.filter(c => c.nombre !== FORM.cuenta) : cs.filter(c => c.tipo !== 'Préstamo');
   return cs;
 }
+// Tarjeta para gastos: la que elijas en Ajustes; si no eliges, tu BBVA Oro (para aprovechar el financiamiento).
+function cuentaGastos() {
+  const elegida = String(DATA.config['Cuenta para gastos'] || '');
+  return elegida && cuentasPara('Gasto').some(c => c.nombre === elegida) ? elegida : tarjetaOro();
+}
+function tarjetaOro() {
+  const cs = cuentasPara('Gasto').filter(c => c.tipo === 'Crédito');
+  const oro = cs.find(c => /oro/i.test(c.nombre) && /bbva/i.test(c.nombre)) || cs.find(c => /oro/i.test(c.nombre));
+  return oro ? oro.nombre : null;
+}
 function cuentaPorDefecto(t) {
+  if (t === 'Gasto' && cuentaGastos()) return cuentaGastos();
   const ok = n => n && cuentasPara(t).some(c => c.nombre === n);
   const ult = ULT('cuenta_' + t);
-  // Para gastos, la sugerencia nunca es una tarjeta de crédito: usar crédito tiene que ser una decisión.
+  // Sin tarjeta para gastos elegida, la sugerencia de gasto no es una de crédito.
   if (ok(ult) && !(t === 'Gasto' && esDeuda(DATA.cuentas.find(c => c.nombre === ult) || {}))) return ult;
   const d = cuentasPara(t).find(c => c.tipo === 'Débito') || cuentasPara(t).find(c => !esDeuda(c));
   return d ? d.nombre : null;
@@ -1205,7 +1348,7 @@ function hojaMov() {
     }
     h += '<div class="fl">' + (t === 'Gasto' ? '¿Con qué pagaste?' : '¿A dónde llegó?') + '</div>' + chipsCuenta(cuentasPara(t), 'cuenta', 'Cuenta');
     const c = DATA.cuentas.find(x => x.nombre === FORM.cuenta), monto = parseMonto(FORM.monto);
-    if (t === 'Gasto' && c && esDeuda(c)) h += '<p class="hint red">Con tarjeta de crédito: sube tu deuda de ' + esc(c.nombre) + (monto > 0 ? ' a ' + money(-saldo(c) + monto - (FORM.id ? montoOriginal() : 0)) : '') + '.</p>';
+    if (t === 'Gasto' && c && esDeuda(c)) h += htmlFinanciamiento(c, FORM.fecha, monto);
     if (t === 'Gasto' && !ed) h += htmlDividir(monto);
   }
   const ph = { Gasto: 'Ej. Oxxo, gasolina Pemex', Ingreso: 'Ej. Quincena', Traspaso: 'Ej. Pago tarjeta', Reembolso: 'Ej. Aaron me pagó la pizza', Ajuste: '', 'Presté': 'Ej. Para la renta', 'Me pagaron': 'Ej. Abono', 'Me prestaron': '', 'Le pagué': '' }[t] || '';
@@ -1520,6 +1663,104 @@ function borrarFijoForm() {
   const copia = Object.assign({}, f);
   encolar('borrarFijo', [f.id]);
   cerrarHoja(); toast(f.nombre + ' eliminado', { txt: 'Deshacer', fn: () => encolar('guardarFijo', [copia]) });
+}
+
+/* ---- Ajustes ---- */
+const APK_URL = 'https://github.com/MartinRTX/Finanzas/releases/tag/apk';
+const TEMAS = [['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']];
+function aplicarTema(t) {
+  const r = document.documentElement;
+  if (t === 'light' || t === 'dark') r.dataset.theme = t; else delete r.dataset.theme;
+  const oscuro = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelectorAll('meta[name=theme-color]').forEach(m => m.setAttribute('content', oscuro ? '#0A0F0D' : '#F1F5F3'));
+}
+function elegirTema(t) { LS.set('fin_tema', t); aplicarTema(t); vibrar(8); pintarHoja(); }
+function abrirAjustes() { if (!DATA) return; FORM = { vista: 'ajustes' }; abrirHoja(); pintarHoja(); enfocarTitulo(); }
+function hojaAjustes() {
+  const tema = LS.get('fin_tema', 'auto'), elegida = String(DATA.config['Cuenta para gastos'] || ''), oro = tarjetaOro(), av = avisosCfg();
+  const valida = elegida && cuentasPara('Gasto').some(c => c.nombre === elegida);
+  const sw = (on, fn, titulo, sub) => '<button class="switch" role="switch" aria-checked="' + !!on + '" onclick="' + fn + '"><span><b>' + titulo + '</b><br><span class="muted">' + sub + '</span></span><span class="knob" aria-hidden="true"></span></button>';
+  let h = titulo('Ajustes');
+  h += '<div class="fl">Tarjeta para gastos</div><div class="pick" role="group" aria-label="Tarjeta para gastos">' +
+    '<button class="' + (!valida ? 'on' : '') + '" aria-pressed="' + !valida + '" onclick="elegirCuentaGastos(\'\')">Automática' + (oro ? ' (' + esc(oro) + ')' : '') + '</button>' +
+    cuentasPara('Gasto').map(c => '<button class="' + (esDeuda(c) ? 'debtacc' : '') + (valida && elegida === c.nombre ? ' on' : '') + '" aria-pressed="' + (valida && elegida === c.nombre) + '" onclick="elegirCuentaGastos(\'' + jsq(c.nombre) + '\')">' + esc(c.nombre) + '</button>').join('') + '</div>' +
+    '<p class="hint">Es la que aparece elegida cada vez que registras un gasto. Pagar con crédito y liquidar el total antes de la fecha límite te da hasta ~50 días de financiamiento sin intereses.</p>';
+  h += '<div class="fl">Tema</div><div class="seg" role="group" aria-label="Tema">' + TEMAS.map(x => '<button class="' + (tema === x[0] ? 'on' : '') + '" aria-pressed="' + (tema === x[0]) + '" onclick="elegirTema(\'' + x[0] + '\')">' + x[1] + '</button>').join('') + '</div>';
+  h += '<div class="fl">Recordatorios</div>';
+  if (NATIVO) {
+    h += sw(av.pagos, "alternarAviso('pagos')", 'Pagos de tarjetas', '2 días antes y el día límite, con lo que tienes que pagar para no generar intereses. También te avisa cuando corta tu tarjeta para gastos.') +
+      sw(av.diario, "alternarAviso('diario')", 'Recordatorio para registrar', 'Un aviso al día si todavía no registras nada.');
+    if (av.diario) h += '<div class="row between" style="margin-top:8px"><label for="fHora" class="muted">Hora del recordatorio</label><input id="fHora" type="time" class="inp" style="width:auto" value="' + esc(av.hora) + '" onchange="horaAviso(this.value)"></div>';
+  } else {
+    h += '<div class="card flat"><div class="t1">App para Android</div><div class="muted" style="margin:4px 0 10px">Con la app instalada (APK) te llegan avisos de pago de tus tarjetas y el recordatorio diario, y vibra de verdad.</div>' +
+      '<div class="actions"><a class="btn sm" href="' + APK_URL + '" target="_blank" rel="noopener">Descargar APK</a>' + (!DEMO ? '<button class="btn sm ghost" onclick="copiarLinkApp()">Copiar link para la app</button>' : '') + '</div>' +
+      '<p class="hint">Abre la app, pega el link en "URL de Apps Script" y listo: no tienes que escribir la clave.</p></div>';
+  }
+  const ver = BASE && BASE.version ? BASE.version : 1;
+  h += '<div class="fl">Conexión</div><div class="card flat"><div class="muted">' + (DEMO ? 'Estás en modo ejemplo: nada se guarda en tu hoja.' :
+    'Conectada a ' + esc(BASE && BASE.hoja ? BASE.hoja : 'tu hoja de Google') + '. Última actualización: ' + haceCuanto(LS.get('fin_ultima', 0)) + '.') + '</div>' +
+    (!DEMO ? '<div class="muted" style="margin-top:4px">App v' + VERSION_APP + (NATIVO ? ' (Android)' : '') + ' · Apps Script v' + ver + (ver < 3 ? ' <b class="red">(falta actualizar el código de Apps Script)</b>' : ' ✓') + '</div>' : '') +
+    '<div class="actions"><button class="btn sm ghost" onclick="abrirGuia()">Ver guía</button>' + (DEMO ? '<button class="btn sm" onclick="salirDemo()">Salir del modo ejemplo</button>' : '<button class="btn sm ghost" onclick="actualizar(true)">Actualizar ahora</button>') +
+    '<button class="btn sm ghost" onclick="cerrarHoja();mostrarSetup()">Cambiar conexión</button>' + (NATIVO && !DEMO ? '<button class="btn sm ghost" onclick="copiarLinkApp()">Copiar link</button>' : '') + '</div></div>';
+  h += '<div class="actbar"><button class="btn ghost" onclick="cerrarHoja()">Cerrar</button></div>';
+  return h;
+}
+function elegirCuentaGastos(n) {
+  encolar('guardarConfig', ['Cuenta para gastos', n], true);
+  vibrar(8); pintarHoja();
+  toast(n ? 'Tus gastos se registrarán con ' + n : 'Tarjeta para gastos automática' + (tarjetaOro() ? ': ' + tarjetaOro() : ''));
+}
+// Link con tu URL y tu clave: para configurar la app de Android sin escribir nada. No lo compartas.
+function copiarLinkApp() {
+  const link = location.origin + location.pathname + '?api=' + encodeURIComponent(API) + '&k=' + encodeURIComponent(KEY);
+  (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => toast('Link copiado: pégalo en la app (lleva tu clave, no lo compartas)'),
+    () => toast('No pude copiar el link'));
+}
+
+/* ---- Recordatorios (solo en el APK): pagos de tarjeta, corte de la tarjeta para gastos y registro diario ---- */
+const avisosCfg = () => Object.assign({ pagos: true, diario: false, hora: '21:00' }, LS.get('fin_avisos', {}));
+async function alternarAviso(k) {
+  const cfg = avisosCfg();
+  cfg[k] = !cfg[k];
+  if (cfg[k]) {
+    const p = await nativo('LocalNotifications', 'requestPermissions');
+    if (!p || p.display !== 'granted') { cfg[k] = false; toast('Permite las notificaciones de Finanzas en los ajustes de Android'); }
+  }
+  LS.set('fin_avisos', cfg); vibrar(8); pintarHoja(); programarAvisos();
+}
+function horaAviso(v) { if (!/^\d{2}:\d{2}$/.test(v)) return; const cfg = avisosCfg(); cfg.hora = v; LS.set('fin_avisos', cfg); programarAvisos(); toast('Te recuerdo a las ' + v); }
+let programando = false;
+async function programarAvisos() {
+  if (!NATIVO || !DATA || programando) return;
+  programando = true;
+  try {
+    const pend = await nativo('LocalNotifications', 'getPending');
+    const viejos = ((pend && pend.notifications) || []).map(n => ({ id: n.id }));
+    if (viejos.length) await nativo('LocalNotifications', 'cancel', { notifications: viejos });
+    const cfg = avisosCfg();
+    if (!cfg.pagos && !cfg.diario) return;
+    const perm = await nativo('LocalNotifications', 'checkPermissions');
+    if (!perm || perm.display !== 'granted') return;
+    await nativo('LocalNotifications', 'createChannel', { id: 'finanzas', name: 'Pagos y recordatorios', description: 'Fechas límite de tus tarjetas y recordatorio para registrar', importance: 4, visibility: 1, vibration: true });
+    const ns = [], ahora = Date.now();
+    const agenda = (id, fecha, hora, title, body) => { const d = new Date(fecha + 'T' + hora + ':00'); if (d.getTime() > ahora + 60000) ns.push({ id, title, body, channelId: 'finanzas', schedule: { at: d, allowWhileIdle: true } }); };
+    if (cfg.pagos) {
+      DATA.cuentas.filter(c => esDeuda(c) && c.diaPago && !c.archivada).forEach((c, i) => {
+        const ps = pagoSinIntereses(c), deuda = -saldo(c);
+        if (ps ? ps.falta <= 0.5 : deuda <= 0.5) return;
+        const lim = ps ? ps.limite : proximaFecha(c.diaPago), cuanto = ps ? 'Paga ' + money(ps.falta) + ' para no generar intereses.' : 'Debes ' + money(deuda) + '.';
+        agenda(1000 + i * 10, sumarDias(lim, -2), '10:00', c.nombre + ': pago en 2 días', 'Fecha límite: ' + fechaLarga(lim) + '. ' + cuanto);
+        agenda(1001 + i * 10, lim, '09:00', c.nombre + ': hoy es tu fecha límite', cuanto);
+      });
+      const g = DATA.cuentas.find(c => c.nombre === cuentaGastos()), ci = g && esDeuda(g) && cicloTarjeta(g, hoy());
+      if (ci) agenda(1900, ci.corte, '20:00', 'Hoy corta tu ' + g.nombre, 'Desde mañana tus compras se pagan hasta el ' + fechaCorta(cicloTarjeta(g, ci.mejor).pago) + ': el mejor momento para compras grandes.');
+    }
+    if (cfg.diario) {
+      const hechos = new Set(DATA.movs.map(m => m.fecha).concat(LS.get('fin_singasto', [])));
+      for (let k = 0; k < 7; k++) { const f = sumarDias(hoy(), k); if (!hechos.has(f)) agenda(2000 + k, f, cfg.hora, '¿Gastaste algo hoy?', 'Regístralo en 10 segundos para que tu presupuesto cuadre.'); }
+    }
+    if (ns.length) await nativo('LocalNotifications', 'schedule', { notifications: ns });
+  } finally { programando = false; }
 }
 
 /* ---- Plan de deuda ---- */
