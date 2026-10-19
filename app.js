@@ -1,4 +1,4 @@
-/* Finanzas v5.0 – app instalable de Martin (PWA y APK de Android con Capacitor).
+/* Finanzas v6.0 – app instalable de Martin (PWA y APK de Android con Capacitor).
  * Lee y escribe la hoja "Mis finanzas 2026" a través de Apps Script (la "API").
  * Lo que registras se guarda primero en el celular y se sube en cuanto hay señal.
  * Pestañas de la hoja: Registro, Cuentas, Categorías, Personas, Fijos y Config.
@@ -133,7 +133,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '5.1';
+const VERSION_APP = '6.0';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -179,7 +179,7 @@ async function apiBatch(ops) { return DEMO ? demoPost(ops) : llamar({ action: 'b
 /* ===================== Modo de ejemplo (sin hoja) ===================== */
 function demoDB() {
   let db = LS.get('fin_demo_db', null);
-  if (!db || !db.metas) {
+  if (!db || !db.patrimonio) {
     const f = '2026-10-10';
     const c = (nombre, tipo, saldo, dc, dp) => ({ nombre, tipo, saldoCorte: saldo, fechaCorte: f, diaCorte: dc || null, diaPago: dp || null, tasa: null, archivada: false });
     db = { cuentas: [c('BBVA Débito', 'Débito', 415), c('Revolut', 'Ahorro', 4907.75), c('Mercado Pago', 'Débito', 28), c('Efectivo', 'Efectivo', 100),
@@ -194,9 +194,11 @@ function demoDB() {
         { id: 'fijo-revolut', nombre: 'Revolut Premium', tipo: 'Gasto', monto: 172.84, categoria: 'Suscripciones y seguros', cuenta: '', dia: null, activo: true },
         { id: 'fijo-quincena', nombre: 'Quincena', tipo: 'Ingreso', monto: 7500, categoria: 'Sueldo', cuenta: '', dia: null, activo: true },
         { id: 'fijo-prestamo-mp', nombre: 'Pago préstamo Mercado Pago', tipo: 'Traspaso', monto: 1049.16, categoria: '', cuenta: '', dia: 6, activo: true, aCuenta: 'Préstamo Mercado Pago' }],
+      patrimonio: [['2026-06-01', 3200, 61500, 25000, 0], ['2026-07-01', 2800, 60100, 25000, 0], ['2026-08-01', 4100, 58700, 25000, 0], ['2026-09-01', 5000, 57200, 25000, 0]]
+        .map(x => ({ fecha: x[0], disp: x[1], deuda: x[2], teDeben: x[3], debes: x[4], neto: x[1] - x[2] - x[4] })),
       metas: [{ id: 'meta-viaje', nombre: 'Viaje a Japón', objetivo: 40000, fecha: '2027-06-30', apartado: 6500, icono: '✈️', cumplida: false }],
       config: { 'Abono mensual a deudas': 6000 }, movs: [{ id: 'demo-msi', fecha: '2026-10-12', tipo: 'Gasto', monto: 4800, cuenta: 'BBVA Oro', aCuenta: '', categoria: 'Gustos y compras', desc: 'Audífonos', registrado: Date.now(), persona: '', fijo: '', meses: 6 }],
-      hoja: 'Modo ejemplo', version: 4 };
+      hoja: 'Modo ejemplo', version: 5 };
     LS.set('fin_demo_db', db);
   }
   return db;
@@ -363,10 +365,10 @@ function saldo(c, hasta) {
   return r2(s);
 }
 // Positivo: te debe. Negativo: le debes.
-function saldoPersona(p) {
+function saldoPersona(p, hasta) {
   let s = p.saldoCorte;
   DATA.movs.forEach(m => {
-    if (m.persona !== p.nombre || m.fecha < p.fechaCorte) return;
+    if (m.persona !== p.nombre || m.fecha < p.fechaCorte || (hasta && m.fecha > hasta)) return;
     if (m.tipo === 'Presté' || m.tipo === 'Le pagué') s += m.monto;
     else if (m.tipo === 'Me pagaron' || m.tipo === 'Me prestaron') s -= m.monto;
   });
@@ -557,7 +559,7 @@ function arrancar() {
   if (!(API && KEY) && !DEMO) return mostrarSetup();
   BASE = LS.get('fin_base', null);
   if (BASE) { normalizar(BASE); recalcular(); pintar(); ejecutarAccion(); }
-  actualizar().then(() => { ejecutarAccion(); if (!LS.get('fin_guia', false) && !FORM) abrirGuia(); });
+  actualizar().then(() => { ejecutarAccion(); revisarNativo(); if (!LS.get('fin_guia', false) && !FORM) abrirGuia(); });
   enviar();
   window.addEventListener('online', () => { pintarSync(); enviar(); });
   window.addEventListener('offline', pintarSync);
@@ -565,7 +567,7 @@ function arrancar() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { guardarBorrador(); programarAvisos(); OCULTA_DESDE = Date.now(); return; }
     if (bloqueoOn() && OCULTA_DESDE && Date.now() - OCULTA_DESDE > 60000) pedirHuella();
-    enviar(); if (!FORM) actualizar();
+    enviar(); if (!FORM) actualizar(); revisarNativo();
   });
   setInterval(enviar, 30000);
   setInterval(pintarSync, 60000);
@@ -594,6 +596,7 @@ function ejecutarAccion() {
   else if (a === 'pagar') { const pl = planDeuda(abonoMensual()); abrirRegistro({ tipo: 'Traspaso', aCuenta: pl.orden[0] ? pl.orden[0].c.nombre : null }); }
   else if (a === 'cuadrar') irA('Cuentas');
   else if (a === 'metas') abrirMeta();
+  else if (a === 'ticket') abrirHojaTicket();
 }
 function mostrarSetup() {
   $('loading').classList.add('hide'); $('view').innerHTML = ''; $('nav').classList.add('hide');
@@ -628,9 +631,13 @@ function pintar() {
   $('titulo').textContent = TAB === 'Inicio' ? 'Finanzas' : TAB;
   const foco = document.activeElement && document.activeElement.id === 'buscar';
   $('view').innerHTML = TAB === 'Inicio' ? vistaInicio() : TAB === 'Movimientos' ? vistaMovs() : TAB === 'Análisis' ? vistaAnalisis() : vistaCuentas();
+  // En Análisis, la pestaña elegida siempre a la vista aunque esté al final de la fila
+  const chipOn = document.querySelector('#view [aria-label="Análisis"] .chip.on');
+  if (chipOn) chipOn.parentNode.scrollLeft = chipOn.offsetLeft - 16;
   if (foco && $('buscar')) { const b = $('buscar'); b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
   pintarSync();
   if (FORM) pintarHoja();
+  programarWidget();
 }
 
 function avisos(r) {
@@ -776,8 +783,11 @@ function vistaInicio() {
   h += '<div class="streak"><span>' + (ra ? '🔥 <b>' + ra + (ra === 1 ? ' día</b> registrando' : ' días</b> seguidos registrando') : 'Empieza tu racha: registra hoy') + '</span>' +
     (!hoyCon ? '<button class="btn sm ghost" onclick="hoyNoGaste()">Hoy no gasté</button>' : '<span class="muted">Hoy ✓</span>') + '</div>';
 
+  h += accionesRapidas();
   h += tarjetaRechazados();
+  h += tarjetaDetectados();
   h += avisos(r);
+  h += tarjetaResumenListo();
   h += tarjetaFinanciamiento();
 
   // Resumen del domingo (domingo: semana en curso; lunes: la que acaba de terminar)
@@ -786,6 +796,7 @@ function vistaInicio() {
 
   // Plan de la quincena
   h += tarjetaQuincena(rq);
+  h += tarjetaProximos();
   h += tarjetaMetas();
 
   // Deuda (compacta)
@@ -898,7 +909,7 @@ function filaMov(m) {
   }
   const t1 = esPersonaTipo(m.tipo) ? (m.persona + (m.desc ? ': ' + m.desc : '')) : (m.desc || (m.tipo === 'Traspaso' ? 'Traspaso' : m.tipo === 'Ajuste' ? 'Ajuste al cuadrar' : m.categoria));
   return '<button class="mv" onclick="editarMov(\'' + jsq(m.id) + '\')"><span class="ic" style="--c:' + colorMov(m) + '" aria-hidden="true">' + icono(m) + '</span>' +
-    '<span class="tx"><div class="d1">' + esc(t1) + (m._pend ? '<i class="pend" title="Sin subir"></i><span class="sr">sin subir</span>' : '') + '</div><div class="d2">' + esc(d2) + '</div></span>' +
+    '<span class="tx"><div class="d1">' + esc(t1) + (m.ticket ? ' <span aria-label="con ticket">🧾</span>' : '') + (m._pend ? '<i class="pend" title="Sin subir"></i><span class="sr">sin subir</span>' : '') + '</div><div class="d2">' + esc(d2) + '</div></span>' +
     '<span class="m num' + cls + '">' + txt + (extra ? '<small>' + extra + '</small>' : '') + '</span></button>';
 }
 
@@ -996,11 +1007,14 @@ function porMes(lista) {
   return r;
 }
 function vistaAnalisis() {
-  const subs = ['Este mes', 'Categorías', 'Tendencias', 'Semana'];
-  let h = '<div class="seg" role="group" aria-label="Análisis" style="margin-top:12px">' + subs.map(x => '<button class="' + (SUB_ANALISIS === x ? 'on' : '') + '" aria-pressed="' + (SUB_ANALISIS === x) + '" onclick="SUB_ANALISIS=\'' + x + '\';pintar()">' + x + '</button>').join('') + '</div>';
+  const subs = ['Este mes', 'Categorías', 'Resumen', 'Patrimonio', 'Tendencias', 'Semana'].filter(x => (x !== 'Resumen' || fx('resumen')) && (x !== 'Patrimonio' || fx('patrimonio')));
+  if (subs.indexOf(SUB_ANALISIS) < 0) SUB_ANALISIS = 'Este mes';
+  let h = '<div class="chips" role="group" aria-label="Análisis" style="margin:12px 0 10px">' + subs.map(x => '<button class="chip' + (SUB_ANALISIS === x ? ' on' : '') + '" aria-pressed="' + (SUB_ANALISIS === x) + '" onclick="SUB_ANALISIS=\'' + x + '\';pintar()">' + x + '</button>').join('') + '</div>';
   if (SUB_ANALISIS === 'Tendencias') return h + vistaTendencias();
   if (SUB_ANALISIS === 'Semana') return h + vistaSemana();
   if (SUB_ANALISIS === 'Categorías') return h + vistaCategorias();
+  if (SUB_ANALISIS === 'Resumen') return h + vistaResumen();
+  if (SUB_ANALISIS === 'Patrimonio') return h + vistaPatrimonio();
   return h + vistaPresupuesto();
 }
 function vistaSemana() {
@@ -1074,6 +1088,7 @@ function vistaTendencias() {
   const top = Object.values(grupos).sort((a, b) => b.v - a.v).slice(0, 8);
   if (top.length) h += '<div class="card"><div class="t1">En dónde más gastas</div><div class="muted" style="margin:2px 0 6px">Agrupado por descripción, ' + (RANGO ? 'últimos ' + RANGO + ' meses' : 'todo el historial') + '.</div>' +
     top.map((g, i) => '<div class="qrow"><span>' + (i + 1) + '. ' + emo(ICONO[g.cat]) + esc(g.n) + ' <span class="muted">(' + g.c + (g.c === 1 ? ' vez' : ' veces') + ')</span></span><b class="num">' + money(g.v, true) + '</b></div>').join('') + '</div>';
+  h += tarjetaHormiga();
   return h;
 }
 function normalizarDesc(d) {
@@ -1201,6 +1216,7 @@ function hojaDetalle() {
   h += '<div class="actgrid">' +
     (deuda ? '<button class="btn" onclick="abrirRegistro({tipo:\'Traspaso\',aCuenta:\'' + n + '\'' + (ps && ps.falta > 0.5 ? ',monto:' + ps.falta : '') + '})">Pagar</button>' : '<button class="btn" onclick="abrirRegistro({tipo:\'Traspaso\',cuenta:\'' + n + '\'})">Mover dinero</button>') +
     '<button class="btn ghost" onclick="abrirCuadrar(\'' + n + '\')">Cuadrar</button><button class="btn ghost" onclick="abrirCuenta(\'' + n + '\')">Editar</button></div>';
+  if (fx('importar')) h += '<button class="btn ghost block" style="margin-top:8px" onclick="abrirImportar(\'' + n + '\')">📄 Importar estado de cuenta</button>';
   h += '<div class="fl" style="margin-top:16px">Movimientos' + (movs.length > 30 ? ' (últimos 30 de ' + movs.length + ')' : '') + '</div>';
   h += movs.length ? '<div class="list">' + movs.slice(0, 30).map(filaMov).join('') + '</div>' : '<div class="list"><div class="empty">Sin movimientos desde el corte.</div></div>';
   if (movs.length > 30) h += '<button class="btn ghost block" style="margin-top:10px" onclick="BUSCA=\'' + n + '\';cerrarHoja();irA(\'Movimientos\')">Ver todos</button>';
@@ -1257,7 +1273,7 @@ function cerrarHojaReal() {
 function pintarHoja() {
   if (!FORM) return;
   const f = { mov: hojaMov, cat: hojaCategoria, cuadrar: hojaCuadrar, cuenta: hojaCuenta, nuevaCuenta: hojaNuevaCuenta, persona: hojaPersona,
-              nuevaPersona: hojaNuevaPersona, fijo: hojaFijo, plan: hojaPlan, detalle: hojaDetalle, guia: hojaGuia, ajustes: hojaAjustes, meta: hojaMeta, catMes: hojaCatMes }[FORM.vista];
+              nuevaPersona: hojaNuevaPersona, fijo: hojaFijo, plan: hojaPlan, detalle: hojaDetalle, guia: hojaGuia, ajustes: hojaAjustes, meta: hojaMeta, catMes: hojaCatMes, ticket: hojaTicket, importar: hojaImportar, proximos: hojaProximos, alcanza: hojaAlcanza }[FORM.vista];
   const a = document.activeElement, foco = a && a.id, sel = a && a.selectionStart, top = $('sheet').scrollTop;
   $('sheet').innerHTML = '<div class="grabzone" id="grab"><div class="grab"></div></div>' + f();
   $('sheet').scrollTop = top;
@@ -1296,7 +1312,8 @@ function abrirRegistro(o) {
   } else {
     LS.del('fin_draft');
     FORM = { vista: 'mov', id: null, tipo: o.tipo || 'Gasto', monto: o.monto != null ? String(o.monto) : '', cuenta: o.cuenta || null, aCuenta: o.aCuenta || null,
-             categoria: o.categoria || null, persona: o.persona || null, desc: o.desc || '', fecha: hoy(), fijo: o.fijo || '', err: '', verTodas: false };
+             categoria: o.categoria || null, persona: o.persona || null, desc: o.desc || '', fecha: o.fecha && o.fecha <= hoy() ? o.fecha : hoy(), fijo: o.fijo || '', err: '',
+             ticket: o.ticket || '', ticketMini: o.ticketMini || '', ticketTexto: o.ticketTexto || '', detectado: o.detectado || '', leido: !!o.leido, verTodas: false };
     autocompletar();
   }
   abrirHoja(); pintarHoja();
@@ -1311,7 +1328,7 @@ function editarMov(id) {
 function abrirFormMov(m) {
   FORM = { vista: 'mov', id: m.id, tipo: m.tipo, monto: String(m.monto), cuenta: m.cuenta, aCuenta: m.aCuenta || null, categoria: m.categoria || null,
            persona: m.persona || null, desc: m.desc || '', fecha: m.fecha, fijo: m.fijo || '', registrado: m.registrado || null, err: m._error ? 'La hoja lo rechazó: ' + m._error : '', verTodas: true,
-           msi: esMSI(m), meses: m.meses || null };
+           msi: esMSI(m), meses: m.meses || null, ticket: m.ticket || '' };
   abrirHoja(); pintarHoja(); enfocarTitulo();
 }
 function cuentasPara(tipo, rol) {
@@ -1405,6 +1422,9 @@ function hojaMov() {
     '" aria-pressed="' + (FORM[campo] === c.nombre) + '" onclick="setForm(\'' + campo + '\',\'' + jsq(c.nombre) + '\')">' + esc(c.nombre) + '</button>').join('') + '</div>';
   let h = titulo(ed ? 'Editar movimiento' : 'Registrar');
   if (FORM.recuperado) h += '<div class="note info">Recuperé lo que estabas capturando. <button class="linkbtn" onclick="empezarDeNuevo()">Empezar de nuevo</button></div>';
+  if (FORM.detectado) h += '<div class="note info">🔔 Lo detecté en una notificación de tu banco. Revisa los datos antes de guardar.</div>';
+  if (typeof htmlTicketForm === 'function') h += htmlTicketForm();
+  if (!ed && t === 'Gasto' && !FORM.ticket && !FORM.ticketMini && fx('ticket')) h += '<button class="btn sm ghost block" style="margin:0 0 12px" onclick="abrirHojaTicket()">📷 Llenar con la foto del ticket</button>';
   if (t === 'Ajuste') h += '<div class="note">Este ajuste se creó al cuadrar ' + esc(FORM.cuenta) + '. Puedes corregir el monto o eliminarlo.</div>';
   else {
     h += '<div class="seg" role="group" aria-label="Tipo de movimiento">' + ['Gasto', 'Ingreso', 'Traspaso', 'Personas'].map(x => {
@@ -1552,7 +1572,8 @@ function guardarMovForm() {
   }
   const m = { id: FORM.id || uid(), fecha: FORM.fecha, tipo: t, monto: monto, cuenta: FORM.cuenta, aCuenta: t === 'Traspaso' ? FORM.aCuenta : '',
               categoria: (t === 'Traspaso' || esPersonaTipo(t)) ? '' : FORM.categoria, desc: FORM.desc, registrado: FORM.registrado || Date.now(),
-              persona: esPersonaTipo(t) ? FORM.persona : '', fijo: FORM.fijo || '', meses: usaMSI() ? FORM.meses : null };
+              persona: esPersonaTipo(t) ? FORM.persona : '', fijo: FORM.fijo || '', meses: usaMSI() ? FORM.meses : null, ticket: FORM.ticket || '' };
+  quitarDetectado(FORM.detectado);
   LS.set('fin_ult_cuenta_' + t, m.cuenta);
   if (t === 'Ingreso') LS.set('fin_ult_cat_Ingreso', m.categoria);
   FORM._guardado = true; LS.del('fin_draft');
@@ -2062,6 +2083,7 @@ function hojaAjustes() {
     '<button class="' + (!valida ? 'on' : '') + '" aria-pressed="' + !valida + '" onclick="elegirCuentaGastos(\'\')">Automática' + (oro ? ' (' + esc(oro) + ')' : '') + '</button>' +
     cuentasPara('Gasto').map(c => '<button class="' + (esDeuda(c) ? 'debtacc' : '') + (valida && elegida === c.nombre ? ' on' : '') + '" aria-pressed="' + (valida && elegida === c.nombre) + '" onclick="elegirCuentaGastos(\'' + jsq(c.nombre) + '\')">' + esc(c.nombre) + '</button>').join('') + '</div>' +
     '<p class="hint">Es la que aparece elegida cada vez que registras un gasto. Pagar con crédito y liquidar el total antes de la fecha límite te da hasta ~50 días de financiamiento sin intereses.</p>';
+  h += htmlFunciones();
   h += '<div class="fl">Tema</div><div class="seg" role="group" aria-label="Tema">' + TEMAS.map(x => '<button class="' + (tema === x[0] ? 'on' : '') + '" aria-pressed="' + (tema === x[0]) + '" onclick="elegirTema(\'' + x[0] + '\')">' + x[1] + '</button>').join('') + '</div>';
   h += '<div class="fl">Recordatorios</div>';
   if (NATIVO) {

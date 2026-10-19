@@ -1,15 +1,19 @@
 /**
- * Finanzas v4 – API de la app (Apps Script pegado en la hoja "Mis finanzas 2026").
+ * Finanzas v5 – API de la app (Apps Script pegado en la hoja "Mis finanzas 2026").
  *
  * Para actualizar:
  *  1. Extensiones > Apps Script. Borra todo y pega este archivo completo.
  *  2. En la línea de CLAVE pon tu clave de siempre (la misma que tiene la app). Guarda.
- *  3. Implementar > Gestionar implementaciones > ✏️ (editar) > Versión: Nueva versión > Implementar.
+ *  3. (Solo la primera vez con la v5, para la foto del ticket) A la izquierda, en "Servicios", toca + y agrega "Drive API".
+ *  4. Arriba elige la función "autorizar" y toca Ejecutar. Acepta los permisos (Drive, Docs, correo y activadores).
+ *  5. Implementar > Gestionar implementaciones > ✏️ (editar) > Versión: Nueva versión > Implementar.
  *     Así la URL /exec sigue siendo la misma y la app no se tiene que volver a configurar.
  *
  * Este archivo vive en GitHub, que es público: ahí la clave NUNCA se escribe, solo en tu Apps Script.
  *
  * Pestañas que usa: Registro, Cuentas, Categorías, Personas, Fijos, Config y Metas.
+ * Lo nuevo de la v5: columna M "Ticket" en Registro (foto en tu Drive), pestaña "Patrimonio" (una foto de tus
+ * saldos cada mes) y el resumen mensual por correo (se activa desde Ajustes de la app).
  * Lo nuevo de la v4 se agrega solo la primera vez que abres la app:
  *  - Registro, columna L "Meses" (compras a meses sin intereses).
  *  - Cuentas, columnas M "Límite de crédito" y N "Pago domiciliado desde".
@@ -18,16 +22,18 @@
 
 const CLAVE = 'PON_AQUI_TU_CLAVE';
 
-const H = { registro: 'Registro', cuentas: 'Cuentas', categorias: 'Categorías', personas: 'Personas', fijos: 'Fijos', config: 'Config', metas: 'Metas' };
+const H = { registro: 'Registro', cuentas: 'Cuentas', categorias: 'Categorías', personas: 'Personas', fijos: 'Fijos', config: 'Config', metas: 'Metas', patrimonio: 'Patrimonio' };
 const TIPOS_CUENTA = ['Débito', 'Ahorro', 'Efectivo', 'Crédito', 'Préstamo'];
 const TIPOS_PERSONA = ['Presté', 'Me pagaron', 'Me prestaron', 'Le pagué'];
 const TIPOS_MOV = ['Gasto', 'Ingreso', 'Traspaso', 'Reembolso', 'Ajuste'].concat(TIPOS_PERSONA);
-// Registro: ID | Fecha | Tipo | Monto | Cuenta | A cuenta | Categoría | Descripción | Registrado | Persona | Fijo | Meses
-const NCOL = 12;
+// Registro: ID | Fecha | Tipo | Monto | Cuenta | A cuenta | Categoría | Descripción | Registrado | Persona | Fijo | Meses | Ticket
+const NCOL = 13;
 // Cuentas: Cuenta | Tipo | Saldo al corte | Fecha de corte | Día de corte | Día de pago | Entradas | Salidas | Ajustes | Saldo actual | Tasa anual | Archivada | Límite de crédito | Pago domiciliado desde
 const NCOL_CUENTAS = 14;
 // Metas: ID | Meta | Objetivo | Fecha meta | Apartado | Ícono | Estado | Creada
 const NCOL_METAS = 8;
+// Patrimonio: Fecha | Disponible | Deuda con bancos | Te deben | Debes | Neto
+const NCOL_PATRIMONIO = 6;
 
 /* ===================== Entrada ===================== */
 function doGet(e) {
@@ -82,6 +88,9 @@ function ejecutar(accion, args) {
     case 'guardarConfig': return guardarConfig(args[0], args[1]);
     case 'guardarMeta': return guardarMeta(args[0]);
     case 'borrarMeta': return borrarMeta(args[0]);
+    case 'subirTicket': return subirTicket(args[0]);
+    case 'configurarResumen': return configurarResumen(args[0]);
+    case 'enviarResumen': return enviarResumenMensual(args[0]);
     default: throw new Error('Acción desconocida: ' + accion);
   }
 }
@@ -132,7 +141,20 @@ function asegurarEstructura() {
   enc(H.registro, 12, 'Meses');
   enc(H.cuentas, 13, 'Límite de crédito');
   enc(H.cuentas, 14, 'Pago domiciliado desde');
+  enc(H.registro, 13, 'Ticket');
   hojaMetas();
+  hojaPatrimonio();
+}
+function hojaPatrimonio() {
+  let h = libro().getSheetByName(H.patrimonio);
+  if (!h) {
+    h = libro().insertSheet(H.patrimonio);
+    h.getRange(1, 1, 1, NCOL_PATRIMONIO).setValues([['Fecha', 'Disponible', 'Deuda con bancos', 'Te deben', 'Debes', 'Neto']]).setFontWeight('bold');
+    h.getRange('A:A').setNumberFormat('dd/mm/yyyy');
+    h.getRange('B:F').setNumberFormat('$#,##0.00');
+    h.setFrozenRows(1);
+  }
+  return h;
 }
 function hojaMetas() {
   let h = libro().getSheetByName(H.metas);
@@ -171,8 +193,15 @@ function leerTodo() {
     id: String(r[0]), fecha: aTexto(r[1]), tipo: String(r[2]), monto: numero(r[3]), cuenta: String(r[4]),
     aCuenta: String(r[5] || ''), categoria: String(r[6] || ''), desc: String(r[7] || ''),
     registrado: r[8] instanceof Date ? r[8].getTime() : null, persona: String(r[9] || ''), fijo: String(r[10] || ''),
-    meses: vacio(r[11]) ? null : numero(r[11]) }));
-  return { cuentas, categorias, personas, fijos, metas, config, movs, historial: leerHistorial(), hoja: libro().getName(), url: libro().getUrl(), zona: zona(), version: 4 };
+    meses: vacio(r[11]) ? null : numero(r[11]), ticket: String(r[12] || '') }));
+  // Una foto de tus saldos por mes: la primera vez que abres la app en el mes se guarda sola
+  const mesActual = Utilities.formatDate(new Date(), zona(), 'yyyy-MM');
+  if (!filas(hojaPatrimonio(), 1).some(r => aTexto(r[0]).slice(0, 7) === mesActual)) fotoPatrimonio();
+  const patrimonio = filas(hojaPatrimonio(), NCOL_PATRIMONIO).filter(r => r[0] !== '').map(r => ({
+    fecha: aTexto(r[0]), disp: numero(r[1]), deuda: numero(r[2]), teDeben: numero(r[3]), debes: numero(r[4]), neto: numero(r[5]) }));
+  const resumen = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'resumenAutomatico');
+  return { cuentas, categorias, personas, fijos, metas, patrimonio, config, movs, historial: leerHistorial(), hoja: libro().getName(), url: libro().getUrl(),
+           zona: zona(), resumenActivo: resumen, correo: correoResumen(), version: 5 };
 }
 
 /* ===================== Historial (jul 2025 – may 2026) =====================
@@ -265,7 +294,8 @@ function guardarMov(m) {
     m.tipo === 'Traspaso' ? m.aCuenta : '',
     m.tipo === 'Ajuste' ? 'Sin registrar' : (m.tipo === 'Traspaso' || esPersona ? '' : m.categoria),
     texto(m.desc, 200), m.registrado ? new Date(m.registrado) : new Date(),
-    esPersona ? m.persona : '', String(m.fijo || ''), meses];
+    esPersona ? m.persona : '', String(m.fijo || ''), meses,
+    /^https:\/\/drive\.google\.com\//.test(String(m.ticket || '')) ? String(m.ticket) : ''];
   const h = hoja(H.registro), r = filaDe(h, 1, m.id);
   // Si ya existe (reintento o edición) se sobrescribe; así nunca se duplica.
   h.getRange(r || siguienteFila(h), 1, 1, NCOL).setValues([fila]);
@@ -381,6 +411,120 @@ function guardarConfig(clave, valor) {
   const h = hoja(H.config), r = filaDe(h, 1, clave);
   if (r) h.getRange(r, 2).setValue(valor); else h.getRange(siguienteFila(h), 1, 1, 2).setValues([[clave, valor]]);
   return true;
+}
+
+/* ===================== Foto del ticket =====================
+ * La app manda la foto ya reducida (JPEG en base64). Se guarda en tu Drive, en la carpeta "Finanzas – tickets",
+ * y Google la lee (OCR) para sacar el texto. La app propone monto, fecha y comercio y tú los corriges antes de guardar.
+ */
+function carpetaTickets() {
+  const props = PropertiesService.getScriptProperties(), id = props.getProperty('carpetaTickets');
+  if (id) { try { return DriveApp.getFolderById(id); } catch (e) { /* la borraste: se crea otra */ } }
+  const c = DriveApp.createFolder('Finanzas – tickets');
+  props.setProperty('carpetaTickets', c.getId());
+  return c;
+}
+function subirTicket(d) {
+  if (!d || !d.base64) throw new Error('Falta la foto');
+  if (d.base64.length > 8 * 1024 * 1024) throw new Error('La foto es demasiado grande');
+  const nombre = 'ticket-' + Utilities.formatDate(new Date(), zona(), 'yyyy-MM-dd-HHmmss') + '.jpg';
+  const blob = Utilities.newBlob(Utilities.base64Decode(d.base64), 'image/jpeg', nombre);
+  const archivo = carpetaTickets().createFile(blob);
+  return { url: archivo.getUrl(), texto: leerTexto(blob) };
+}
+// OCR con el servicio avanzado "Drive API" (v3 o v2): convierte la imagen a un Google Doc temporal y lee su texto
+function leerTexto(blob) {
+  if (typeof Drive === 'undefined') throw new Error('Activa "Drive API" en Apps Script: Servicios > + > Drive API, y vuelve a implementar');
+  const doc = Drive.Files.create
+    ? Drive.Files.create({ name: 'ocr-ticket', mimeType: MimeType.GOOGLE_DOCS }, blob, { ocrLanguage: 'es' })
+    : Drive.Files.insert({ title: 'ocr-ticket', mimeType: MimeType.GOOGLE_DOCS }, blob, { ocr: true, ocrLanguage: 'es' });
+  try { return DocumentApp.openById(doc.id).getBody().getText(); }
+  finally { DriveApp.getFileById(doc.id).setTrashed(true); }
+}
+
+/* ===================== Patrimonio y resumen mensual ===================== */
+// Foto de tus saldos de hoy (usa la columna "Saldo actual" de Cuentas y Personas). Una por mes; si ya hay una de este mes se reemplaza.
+function fotoPatrimonio() {
+  let disp = 0, deuda = 0, teDeben = 0, debes = 0;
+  filas(hoja(H.cuentas), 12).forEach(r => {
+    if (r[0] === '' || String(r[11]) === 'Sí') return;
+    const s = numero(r[9]);
+    if (r[1] === 'Crédito' || r[1] === 'Préstamo') deuda += -s; else disp += s;
+  });
+  filas(hoja(H.personas), 7).forEach(r => { if (r[0] === '') return; const s = numero(r[6]); if (s > 0) teDeben += s; else debes += -s; });
+  const red = n => Math.round(n * 100) / 100, hoy = new Date(), h = hojaPatrimonio();
+  const fila = [hoy, red(disp), red(deuda), red(teDeben), red(debes), red(disp - deuda - debes)];
+  const mes = Utilities.formatDate(hoy, zona(), 'yyyy-MM'), fs = filas(h, 1);
+  let r = 0;
+  fs.forEach((x, i) => { if (aTexto(x[0]).slice(0, 7) === mes) r = i + 2; });
+  h.getRange(r || siguienteFila(h), 1, 1, NCOL_PATRIMONIO).setValues([fila]);
+  return { disp: fila[1], deuda: fila[2], teDeben: fila[3], debes: fila[4], neto: fila[5] };
+}
+function correoResumen() {
+  const c = filas(hoja(H.config), 2).find(r => String(r[0]) === 'Correo para resumen');
+  return c && String(c[1]).indexOf('@') > 0 ? String(c[1]) : Session.getEffectiveUser().getEmail();
+}
+// Prende o apaga el envío automático: el día 1 de cada mes a las 8 am te llega el resumen del mes anterior
+function configurarResumen(activar) {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'resumenAutomatico').forEach(t => ScriptApp.deleteTrigger(t));
+  if (activar) ScriptApp.newTrigger('resumenAutomatico').timeBased().onMonthDay(1).atHour(8).inTimezone(zona()).create();
+  return { activo: !!activar, correo: correoResumen() };
+}
+function resumenAutomatico() { fotoPatrimonio(); enviarResumenMensual(); }
+
+// Arma y manda el resumen de un mes ("yyyy-MM"; si no se dice, el mes anterior)
+function enviarResumenMensual(mk) {
+  const z = zona(), hoy = new Date();
+  if (!mk || !/^\d{4}-\d{2}$/.test(mk)) { const d = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 15); mk = Utilities.formatDate(d, z, 'yyyy-MM'); }
+  const [y, m] = mk.split('-').map(Number), ant = Utilities.formatDate(new Date(y, m - 2, 15), z, 'yyyy-MM');
+  const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  const nombre = MESES[m - 1] + ' ' + y, $ = n => '$' + Math.round(n).toLocaleString('es-MX');
+  const movs = filas(hoja(H.registro), NCOL).filter(r => r[0] !== '' && r[1] instanceof Date);
+  const datos = k => {
+    const x = { gasto: 0, ingreso: 0, cat: {}, lista: [] };
+    movs.forEach(r => {
+      if (Utilities.formatDate(r[1], z, 'yyyy-MM') !== k) return;
+      const monto = numero(r[3]);
+      if (r[2] === 'Gasto') { x.gasto += monto; x.cat[r[6]] = (x.cat[r[6]] || 0) + monto; x.lista.push([String(r[7] || r[6]), monto]); }
+      else if (r[2] === 'Reembolso') { x.gasto -= monto; x.cat[r[6]] = (x.cat[r[6]] || 0) - monto; }
+      else if (r[2] === 'Ingreso') x.ingreso += monto;
+    });
+    return x;
+  };
+  const a = datos(mk), b = datos(ant);
+  const pres = filas(hoja(H.categorias), 3).filter(r => r[1] === 'Gasto').reduce((s, r) => s + numero(r[2]), 0);
+  const cats = Object.keys(a.cat).filter(c => a.cat[c] > 0).sort((p, q) => a.cat[q] - a.cat[p]);
+  const top = a.lista.sort((p, q) => q[1] - p[1]).slice(0, 5);
+  const foto = fotoPatrimonio(), fotos = filas(hojaPatrimonio(), NCOL_PATRIMONIO).filter(r => r[0] instanceof Date && Utilities.formatDate(r[0], z, 'yyyy-MM') <= ant);
+  const deudaAntes = fotos.length ? numero(fotos[fotos.length - 1][2]) : null;
+  const metas = filas(hojaMetas(), NCOL_METAS).filter(r => r[0] !== '' && r[6] !== 'Cumplida');
+  const dif = b.gasto > 0 ? Math.round((a.gasto - b.gasto) / b.gasto * 100) : null;
+  const fila = (t, v, color) => '<tr><td style="padding:8px 0;border-top:1px solid #E3EAE6">' + t + '</td><td style="padding:8px 0;border-top:1px solid #E3EAE6;text-align:right;font-weight:700;' + (color ? 'color:' + color : '') + '">' + v + '</td></tr>';
+  const caja = (titulo, cuerpo) => '<div style="background:#fff;border:1px solid #DCE5E1;border-radius:16px;padding:16px;margin:12px 0"><div style="font-weight:800;font-size:15px;margin-bottom:6px">' + titulo + '</div>' + cuerpo + '</div>';
+  let html = '<div style="font-family:Arial,Helvetica,sans-serif;background:#F1F5F3;padding:20px;color:#0E1A16;max-width:560px;margin:auto">' +
+    '<div style="background:linear-gradient(145deg,#093F33,#0D7A5E);color:#fff;border-radius:20px;padding:20px"><div style="opacity:.85">Tu resumen de ' + nombre + '</div>' +
+    '<div style="font-size:34px;font-weight:800;margin:6px 0">' + $(a.gasto) + '</div><div style="opacity:.85">gastaste' + (pres ? ' de ' + $(pres) + ' de presupuesto' : '') +
+    (dif !== null ? ' · ' + (dif > 0 ? '▲ ' + dif + '% más' : '▼ ' + Math.abs(dif) + '% menos') + ' que ' + MESES[(m + 10) % 12] : '') + '</div></div>';
+  html += caja('Números del mes', '<table style="width:100%;border-collapse:collapse;font-size:14px">' +
+    fila('Ingresos', $(a.ingreso)) + fila('Gasto neto', $(a.gasto)) + fila('Ahorro', $(a.ingreso - a.gasto), a.ingreso - a.gasto >= 0 ? '#11804F' : '#CF3F2A') +
+    fila('Deuda con bancos hoy', $(foto.deuda), '#CF3F2A') + (deudaAntes !== null ? fila('Cambio de deuda', (foto.deuda <= deudaAntes ? '▼ ' : '▲ ') + $(Math.abs(foto.deuda - deudaAntes)), foto.deuda <= deudaAntes ? '#11804F' : '#CF3F2A') : '') +
+    fila('Patrimonio neto', $(foto.neto), foto.neto >= 0 ? '#11804F' : '#CF3F2A') + '</table>');
+  if (cats.length) html += caja('En qué se fue', '<table style="width:100%;border-collapse:collapse;font-size:14px">' + cats.map(c => fila(c + ' <span style="color:#56665F">' + Math.round(a.cat[c] / a.gasto * 100) + '%</span>' +
+    (b.cat[c] ? ' <span style="color:#56665F;font-size:12px">(' + MESES[(m + 10) % 12].slice(0, 3) + ': ' + $(b.cat[c]) + ')</span>' : ''), $(a.cat[c]))).join('') + '</table>');
+  if (top.length) html += caja('Tus 5 gastos más grandes', '<table style="width:100%;border-collapse:collapse;font-size:14px">' + top.map(t => fila(t[0], $(t[1]))).join('') + '</table>');
+  if (metas.length) html += caja('Tus metas', '<table style="width:100%;border-collapse:collapse;font-size:14px">' + metas.map(r => fila((r[5] || '🎯') + ' ' + r[1], Math.round(numero(r[4]) / Math.max(1, numero(r[2])) * 100) + '% · ' + $(r[4]) + ' de ' + $(r[2]))).join('') + '</table>');
+  html += '<p style="color:#56665F;font-size:12px;text-align:center">Mandado por tu app Finanzas. Para dejar de recibirlo: Ajustes → Resumen por correo.</p></div>';
+  MailApp.sendEmail({ to: correoResumen(), subject: 'Tu resumen de ' + nombre + ': gastaste ' + $(a.gasto), htmlBody: html, name: 'Finanzas' });
+  return { enviado: true, correo: correoResumen(), mes: mk };
+}
+
+// Ejecútala una vez desde el editor para aceptar los permisos nuevos (Drive, Docs, correo y activadores)
+function autorizar() {
+  carpetaTickets();
+  DocumentApp.getActiveDocument;
+  MailApp.getRemainingDailyQuota();
+  ScriptApp.getProjectTriggers();
+  Logger.log('Listo: permisos aceptados. Ahora implementa una versión nueva.');
 }
 
 /* Para probar desde el editor: Ejecutar > probar. Revisa el registro de ejecución. */
