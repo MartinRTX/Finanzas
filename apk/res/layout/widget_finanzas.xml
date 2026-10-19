@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget de Finanzas: fondo verde oscuro, lo que te queda de la quincena y botones + y 📷 -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_raiz"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_fondo"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical"
+        android:layout_marginEnd="64dp"
+        android:orientation="vertical">
+
+        <TextView android:id="@+id/w_etiqueta" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#CCFFFFFF" android:textSize="13sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/w_monto" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#FFFFFF" android:textSize="30sp" android:textStyle="bold" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/w_sub" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#DDFFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+        <TextView android:id="@+id/w_sub2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:textColor="#AAFFFFFF" android:textSize="12sp" android:maxLines="1" android:ellipsize="end" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:orientation="vertical">
+
+        <TextView android:id="@+id/w_mas" android:layout_width="52dp" android:layout_height="52dp"
+            android:background="@drawable/widget_boton" android:gravity="center" android:text="+"
+            android:textColor="#04120C" android:textSize="30sp" android:textStyle="bold" android:contentDescription="Registrar gasto" />
+        <TextView android:id="@+id/w_foto" android:layout_width="52dp" android:layout_height="36dp" android:layout_marginTop="8dp"
+            android:background="@drawable/widget_boton2" android:gravity="center" android:text="Ticket"
+            android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold" android:contentDescription="Foto del ticket" />
+    </LinearLayout>
+</FrameLayout>
