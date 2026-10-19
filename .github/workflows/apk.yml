@@ -1,5 +1,6 @@
 # Compila el APK de la app Finanzas en los servidores de GitHub (no necesitas Android Studio).
 # Se corre solo cuando cambias algo en la carpeta apk/ o este archivo, o a mano desde la pestaña Actions.
+# Solo publica el APK desde main, para que lo que descargas sea siempre lo que ya está en tu página.
 # Resultado: en "Releases" del repo aparece Finanzas.apk para instalar desde el celular.
 #
 # Firma: usa los secretos KEYSTORE_B64 y KEYSTORE_PASS (los mismos que pusiste en el repo Gym sirven).
@@ -10,6 +11,7 @@ name: APK Android
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'apk/**'
       - '.github/workflows/apk.yml'
@@ -41,19 +43,24 @@ jobs:
       - name: Crear el proyecto Android
         run: npx cap add android
 
-      - name: Ícono de la app
+      - name: Ícono y pantalla de arranque de Finanzas
+        # Los íconos ya vienen hechos en apk/res (adaptativo + monocromo para los íconos temáticos de Android 13+).
+        # Se quitan los splash.png de Capacitor (traen su logo) y se usa apk/res/drawable/splash.xml.
         run: |
-          mkdir -p assets
-          cp ../icon-512.png assets/icon-only.png || true
-          cp ../icon-512.png assets/splash.png || true
-          npx --yes @capacitor/assets@3.0.5 generate --android \
-            --iconBackgroundColor '#0A0F0D' --iconBackgroundColorDark '#0A0F0D' \
-            --splashBackgroundColor '#0A0F0D' --splashBackgroundColorDark '#0A0F0D' \
-            || echo "No se pudo generar el ícono; se queda el de Capacitor"
+          R=android/app/src/main/res
+          find "$R" -name 'splash.png' -delete
+          cp -r res/* "$R"/
+          S=$R/values/styles.xml
+          grep -q windowSplashScreenBackground "$S" || sed -i 's#\(<style name="AppTheme.NoActionBarLaunch"[^>]*>\)#\1\n        <item name="windowSplashScreenBackground">@color/splash_bg</item>\n        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_round</item>#' "$S"
+          cat "$S"
+          ls "$R"/mipmap-anydpi-v26
 
-      - name: Permiso para el bloqueo con huella
+      - name: Permiso para el bloqueo con huella y sin respaldo en la nube
+        # allowBackup=false: tu clave y la copia local de tus finanzas no se suben al respaldo de Google del celular
         run: |
           M=android/app/src/main/AndroidManifest.xml
+          sed -i 's#android:allowBackup="true"#android:allowBackup="false"#' "$M"
+          grep -n "allowBackup" "$M" || true
           grep -q 'USE_BIOMETRIC' "$M" || sed -i 's#<application#<uses-permission android:name="android.permission.USE_BIOMETRIC" />\n    <application#' "$M"
           grep -n "USE_BIOMETRIC" "$M"
 

@@ -9,9 +9,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Finanzas">
 <meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <title>Finanzas</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png">
+<link rel="icon" href="favicon-32.png" sizes="32x32">
+<link rel="icon" href="icon-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="bricolage.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
@@ -23,9 +25,9 @@
   /* Tema claro */
   :root {
     --bg: #F1F5F3; --card: #FFFFFF; --card2: #EBF1EE; --ink: #0E1A16; --muted: #56665F; --line: #DCE5E1;
-    --pri: #0D7A5E; --pri-2: #13A57E; --pri-weak: #DAF2E8; --on-pri: #FFFFFF;
+    --pri: #0D7A5E; --pri-2: #0E8462; --pri-weak: #DAF2E8; --on-pri: #FFFFFF;
     --debt: #CF3F2A; --debt-weak: #FCE7E2; --sun: #92600A; --sun-bar: #E9A21F; --sun-weak: #FCF1D8; --ok: #11804F;
-    --hero: linear-gradient(145deg, #093F33 0%, #0D7A5E 48%, #1BB384 100%); --glow: rgba(13, 122, 94, .30);
+    --hero: linear-gradient(145deg, #093F33 0%, #0D7A5E 55%, #0E8462 100%); --glow: rgba(13, 122, 94, .30);
     --nav-bg: rgba(255, 255, 255, .86); --sheet: #F6F9F7;
     --shadow: 0 1px 2px rgba(15, 45, 35, .05), 0 8px 24px rgba(15, 45, 35, .06);
     --nav-h: 66px; --disp: "Bricolage", Inter, -apple-system, "Segoe UI", Roboto, sans-serif; --txt: Inter, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
@@ -40,7 +42,7 @@
       --bg: #0A0F0D; --card: #121916; --card2: #19221F; --ink: #EAF3EF; --muted: #93A49D; --line: #22302A;
       --pri: #3DDC97; --pri-2: #86F2C4; --pri-weak: #10302A; --on-pri: #04120C;
       --debt: #FF7A66; --debt-weak: #3A1A14; --sun: #FFC857; --sun-bar: #F4BF55; --sun-weak: #33280F; --ok: #4BE39B;
-      --hero: linear-gradient(145deg, #0A332A 0%, #0F6A51 52%, #1DA67B 100%); --glow: rgba(61, 220, 151, .16);
+      --hero: linear-gradient(145deg, #0A332A 0%, #0F6A51 55%, #0E8462 100%); --glow: rgba(61, 220, 151, .16);
       --nav-bg: rgba(18, 25, 22, .84); --sheet: #0F1513;
       --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 10px 28px rgba(0, 0, 0, .35);
       --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s0: #5E6A65;
@@ -51,7 +53,7 @@
     --bg: #0A0F0D; --card: #121916; --card2: #19221F; --ink: #EAF3EF; --muted: #93A49D; --line: #22302A;
     --pri: #3DDC97; --pri-2: #86F2C4; --pri-weak: #10302A; --on-pri: #04120C;
     --debt: #FF7A66; --debt-weak: #3A1A14; --sun: #FFC857; --sun-bar: #F4BF55; --sun-weak: #33280F; --ok: #4BE39B;
-    --hero: linear-gradient(145deg, #0A332A 0%, #0F6A51 52%, #1DA67B 100%); --glow: rgba(61, 220, 151, .16);
+    --hero: linear-gradient(145deg, #0A332A 0%, #0F6A51 55%, #0E8462 100%); --glow: rgba(61, 220, 151, .16);
     --nav-bg: rgba(18, 25, 22, .84); --sheet: #0F1513;
     --shadow: 0 1px 0 rgba(255, 255, 255, .03) inset, 0 10px 28px rgba(0, 0, 0, .35);
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #008300; --s7: #9085e9; --s0: #5E6A65;
@@ -83,8 +85,8 @@
 
   /* Héroe del inicio: tarjeta con degradado */
   .hero { position: relative; overflow: hidden; margin: 6px 0 14px; padding: 16px 18px 16px; border-radius: 26px; background: var(--hero); color: #fff; box-shadow: 0 16px 36px var(--glow); isolation: isolate; }
-  .hero::before { content: ""; position: absolute; z-index: -1; width: 260px; height: 260px; right: -90px; top: -120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 255, 255, .22), transparent); }
-  .hero::after { content: ""; position: absolute; z-index: -1; width: 200px; height: 200px; left: -80px; bottom: -120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(134, 242, 196, .28), transparent); }
+  .hero::before { content: ""; position: absolute; z-index: -1; width: 260px; height: 260px; right: -90px; top: -120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 255, 255, .12), transparent); }
+  .hero::after { content: ""; position: absolute; z-index: -1; width: 200px; height: 200px; left: -80px; bottom: -120px; border-radius: 50%; background: radial-gradient(closest-side, rgba(134, 242, 196, .14), transparent); }
   .hero .lbl { color: rgba(255, 255, 255, .82); font-size: 14.5px; }
   .hero .big { font: 780 46px/1.05 var(--disp); letter-spacing: -.04em; margin: 4px 0 4px; font-variant-numeric: tabular-nums; color: #fff; }
   .hero .big.neg { color: #FFD1C7; }
@@ -219,14 +221,14 @@
   .plas.oro .plas-tag { background: rgba(0, 0, 0, .14); }
   .plas.oro .plas-chip { background: linear-gradient(135deg, #FFF3C8, #D8B25A); }
   .bbva { background: linear-gradient(135deg, #031330 0%, #072146 45%, #1464A5 100%); }
-  .revolut { background: linear-gradient(135deg, #17181C 0%, #3A3D46 60%, #8E929C 100%); }
-  .mp { background: linear-gradient(135deg, #005C97 0%, #009EE3 60%, #5DD3F6 100%); }
+  .revolut { background: linear-gradient(135deg, #17181C 0%, #3A3D46 60%, #5A5E68 100%); }
+  .mp { background: linear-gradient(135deg, #004A7C 0%, #0068A8 55%, #0877B5 100%); }
   .nu { background: linear-gradient(135deg, #3E0D74 0%, #820AD1 100%); }
-  .deb { background: linear-gradient(135deg, #0A4F3F 0%, #14A37C 100%); }
-  .aho { background: linear-gradient(135deg, #2E2A7A 0%, #6366F1 100%); }
-  .efe { background: linear-gradient(135deg, #14532D 0%, #3FBF6C 100%); }
+  .deb { background: linear-gradient(135deg, #0A4F3F 0%, #0F8463 100%); }
+  .aho { background: linear-gradient(135deg, #2E2A7A 0%, #5558E3 100%); }
+  .efe { background: linear-gradient(135deg, #14532D 0%, #1E8449 100%); }
   .cred { background: linear-gradient(135deg, #1F2937 0%, #4B5563 100%); }
-  .pres { background: linear-gradient(135deg, #6B2610 0%, #E05A14 100%); }
+  .pres { background: linear-gradient(135deg, #6B2610 0%, #C2410C 100%); }
 
   /* Financiamiento de la tarjeta para gastos */
   .fin-card .tx { display: flex; flex-direction: column; }
@@ -361,6 +363,12 @@
   .dots { display: flex; gap: 6px; justify-content: center; margin-top: 14px; }
   .dots i { width: 8px; height: 8px; border-radius: 9px; background: var(--line); }
   .dots i.on { background: var(--pri); width: 22px; }
+  /* Modo discreto: los montos se tapan hasta que lo apagues */
+  .discreto .amt, .discreto .big, .discreto .plas-amt, .discreto .mv .m, .discreto .num, .discreto .dona-t, .discreto .hero .of, .discreto .legend,
+  .discreto .fixed-line b, .discreto .qrow b, .discreto .note, .discreto .plas-ft, .discreto .stat .sub, .discreto .hint b, .discreto .day .num { filter: blur(9px); transition: filter .15s; }
+  .discreto .sheet .amount input { filter: none; }
+  .iconbtn[aria-pressed=true] { background: var(--pri-weak); color: var(--pri); border-color: transparent; }
+
   /* v5: límite de crédito, metas, categorías y bloqueo */
   .plas-uso { display: block; height: 5px; border-radius: 9px; background: rgba(255, 255, 255, .25); overflow: hidden; margin-top: 8px; }
   .plas-uso i { display: block; height: 100%; background: currentColor; border-radius: 9px; }
@@ -400,6 +408,7 @@
 </head>
 <body>
 <header class="appbar"><div class="in"><h1 id="titulo">Finanzas</h1><button id="sync" class="sync" onclick="tocarSync()" aria-live="polite">…</button>
+  <button id="ojo" class="iconbtn" onclick="alternarDiscreto()" aria-label="Ocultar montos" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
   <button class="iconbtn" onclick="abrirAjustes()" aria-label="Ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button></div></header>
 <main class="wrap">
   <div id="loading" class="center"><div>Cargando tus cuentas…</div></div>

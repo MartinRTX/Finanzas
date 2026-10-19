@@ -1,9 +1,9 @@
 // Guarda la app en el celular para que abra rápido y funcione sin señal.
 // Cuando subas una versión nueva de la app, cambia el número de VERSION.
-const VERSION = 'fin-v5.0';
+const VERSION = 'fin-v5.1';
 const ARCHIVOS = [
   './', './index.html', './app.js', './manifest.webmanifest', './bricolage.woff2', './fonts/inter.woff2',
-  './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './sc-gasto.png', './sc-pagar.png', './sc-cuadrar.png'
+  './icon-192.png', './favicon-32.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './sc-gasto.png', './sc-pagar.png', './sc-cuadrar.png', './sc-metas.png'
 ];
 
 self.addEventListener('install', e => {

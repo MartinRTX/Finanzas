@@ -32,9 +32,9 @@ const NCOL_METAS = 8;
 /* ===================== Entrada ===================== */
 function doGet(e) {
   return responder(() => {
+    // Por GET solo se contesta "ping": los datos se piden por POST para que la clave nunca viaje en la URL (las URL quedan en registros).
     revisarClave(e.parameter.k);
-    const accion = e.parameter.action || 'data';
-    if (accion === 'data') return leerTodo();
+    const accion = e.parameter.action || 'ping';
     if (accion === 'ping') return 'ok';
     throw new Error('Acción desconocida: ' + accion);
   });
@@ -117,6 +117,9 @@ function siguienteFila(h) {
   for (let i = vals.length - 1; i >= 0; i--) if (vals[i][0] !== '') return i + 3;
   return 2;
 }
+// Texto que escribes en la app: si empieza con = + @ Sheets lo trataría como fórmula (por ejemplo =IMPORTXML(...) podría sacar datos).
+// El apóstrofo inicial lo deja como texto y no se ve en la celda.
+function texto(v, max) { let t = String(v == null ? '' : v).trim().slice(0, max || 200); return /^[=+@]/.test(t) ? "'" + t : t; }
 function dia(v) { return vacio(v) ? '' : Math.min(31, Math.max(1, Math.round(numero(v)))); }
 function sumifs(col, fila, tipo, fechaCelda) {
   const R = 'Registro!';
@@ -169,7 +172,7 @@ function leerTodo() {
     aCuenta: String(r[5] || ''), categoria: String(r[6] || ''), desc: String(r[7] || ''),
     registrado: r[8] instanceof Date ? r[8].getTime() : null, persona: String(r[9] || ''), fijo: String(r[10] || ''),
     meses: vacio(r[11]) ? null : numero(r[11]) }));
-  return { cuentas, categorias, personas, fijos, metas, config, movs, historial: leerHistorial(), hoja: libro().getName(), zona: zona(), version: 4 };
+  return { cuentas, categorias, personas, fijos, metas, config, movs, historial: leerHistorial(), hoja: libro().getName(), url: libro().getUrl(), zona: zona(), version: 4 };
 }
 
 /* ===================== Historial (jul 2025 – may 2026) =====================
@@ -261,7 +264,7 @@ function guardarMov(m) {
   const fila = [m.id, aFecha(m.fecha), m.tipo, monto, m.cuenta,
     m.tipo === 'Traspaso' ? m.aCuenta : '',
     m.tipo === 'Ajuste' ? 'Sin registrar' : (m.tipo === 'Traspaso' || esPersona ? '' : m.categoria),
-    String(m.desc || '').slice(0, 200), m.registrado ? new Date(m.registrado) : new Date(),
+    texto(m.desc, 200), m.registrado ? new Date(m.registrado) : new Date(),
     esPersona ? m.persona : '', String(m.fijo || ''), meses];
   const h = hoja(H.registro), r = filaDe(h, 1, m.id);
   // Si ya existe (reintento o edición) se sobrescribe; así nunca se duplica.
@@ -295,13 +298,14 @@ function guardarCuenta(c) {
       if (c.domiciliado && !filaDe(h, 1, c.domiciliado)) throw new Error('Cuenta desconocida: ' + c.domiciliado);
       h.getRange(r, 14).setValue(c.domiciliado || '');
     }
-    if (c.nuevoNombre && c.nuevoNombre !== c.nombre) renombrar(c.nombre, c.nuevoNombre, H.cuentas, [[H.registro, 5], [H.registro, 6], [H.fijos, 6], [H.fijos, 9], [H.cuentas, 14]]);
+    if (c.nuevoNombre && c.nuevoNombre !== c.nombre) renombrar(c.nombre, texto(c.nuevoNombre, 40), H.cuentas, [[H.registro, 5], [H.registro, 6], [H.fijos, 6], [H.fijos, 9], [H.cuentas, 14]]);
     return true;
   }
   if (TIPOS_CUENTA.indexOf(c.tipo) < 0) throw new Error('Tipo de cuenta inválido: ' + c.tipo);
+  if (!texto(c.nombre, 40)) throw new Error('La cuenta necesita nombre');
   const n = siguienteFila(h), d = '$D' + n;
   h.getRange(n, 1, 1, 13).setValues([[
-    c.nombre, c.tipo, numero(c.saldoCorte), aFecha(c.fechaCorte), dia(c.diaCorte), dia(c.diaPago),
+    texto(c.nombre, 40), c.tipo, numero(c.saldoCorte), aFecha(c.fechaCorte), dia(c.diaCorte), dia(c.diaPago),
     '=' + ['Ingreso', 'Reembolso', 'Me pagaron', 'Me prestaron'].map(t => sumifs('$E', n, t, d)).join('+') + '+' + sumifs('$F', n, 'Traspaso', d),
     '=' + ['Gasto', 'Traspaso', 'Presté', 'Le pagué'].map(t => sumifs('$E', n, t, d)).join('+'),
     '=' + sumifs('$E', n, 'Ajuste', d),
@@ -315,15 +319,15 @@ function guardarCuenta(c) {
 function guardarPersona(p) {
   const h = hoja(H.personas), r = filaDe(h, 1, p.nombre);
   if (r) {
-    if ('nota' in p) h.getRange(r, 4).setValue(String(p.nota || '').slice(0, 200));
+    if ('nota' in p) h.getRange(r, 4).setValue(texto(p.nota, 200));
     if ('archivada' in p) h.getRange(r, 8).setValue(p.archivada ? 'Sí' : '');
-    if (p.nuevoNombre && p.nuevoNombre !== p.nombre) renombrar(p.nombre, p.nuevoNombre, H.personas, [[H.registro, 10]]);
+    if (p.nuevoNombre && p.nuevoNombre !== p.nombre) renombrar(p.nombre, texto(p.nuevoNombre, 40), H.personas, [[H.registro, 10]]);
     return true;
   }
   if (!String(p.nombre || '').trim()) throw new Error('La persona necesita nombre');
   const n = siguienteFila(h), d = '$C' + n;
   h.getRange(n, 1, 1, 8).setValues([[
-    String(p.nombre).trim(), numero(p.saldoCorte), aFecha(p.fechaCorte), String(p.nota || '').slice(0, 200),
+    texto(p.nombre, 40), numero(p.saldoCorte), aFecha(p.fechaCorte), texto(p.nota, 200),
     '=' + sumifs('$J', n, 'Presté', d) + '+' + sumifs('$J', n, 'Le pagué', d),
     '=' + sumifs('$J', n, 'Me pagaron', d) + '+' + sumifs('$J', n, 'Me prestaron', d),
     '=B' + n + '+E' + n + '-F' + n, '' ]]);
@@ -352,7 +356,7 @@ function guardarFijo(f) {
   if (['Gasto', 'Ingreso', 'Traspaso'].indexOf(f.tipo) < 0) throw new Error('Tipo de pago fijo inválido');
   if (f.tipo === 'Traspaso' && !filaDe(hoja(H.cuentas), 1, f.aCuenta)) throw new Error('Elige a qué deuda va el pago');
   const h = hoja(H.fijos), r = filaDe(h, 1, f.id);
-  const fila = [f.id, String(f.nombre).trim(), f.tipo, Math.round(numero(f.monto) * 100) / 100, f.tipo === 'Traspaso' ? '' : (f.categoria || ''),
+  const fila = [f.id, texto(f.nombre, 60), f.tipo, Math.round(numero(f.monto) * 100) / 100, f.tipo === 'Traspaso' ? '' : (f.categoria || ''),
                 f.cuenta || '', dia(f.dia), f.activo === false ? 'No' : 'Sí', f.tipo === 'Traspaso' ? f.aCuenta : ''];
   h.getRange(r || siguienteFila(h), 1, 1, 9).setValues([fila]);
   return true;
@@ -367,7 +371,7 @@ function guardarMeta(m) {
   const h = hojaMetas(), r = filaDe(h, 1, m.id);
   const creada = r ? h.getRange(r, 8).getValue() : new Date();
   h.getRange(r || siguienteFila(h), 1, 1, NCOL_METAS).setValues([[
-    m.id, String(m.nombre).trim().slice(0, 60), Math.round(numero(m.objetivo) * 100) / 100, m.fecha ? aFecha(m.fecha) : '',
+    m.id, texto(m.nombre, 60), Math.round(numero(m.objetivo) * 100) / 100, m.fecha ? aFecha(m.fecha) : '',
     Math.max(0, Math.round(numero(m.apartado) * 100) / 100), String(m.icono || '').slice(0, 8), m.cumplida ? 'Cumplida' : 'Activa', creada ]]);
   return true;
 }
