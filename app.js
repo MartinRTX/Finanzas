@@ -17,6 +17,8 @@ function hoy() { return claveDia(new Date()); }
 function sumarDias(k, n) { const d = new Date(k + 'T12:00:00'); d.setDate(d.getDate() + n); return claveDia(d); }
 function difDias(a, b) { return Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+// "Pagué" y "pague" encuentran lo mismo
+function sinAcentos(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function jsq(s) { return esc(String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'")); }
 const r2 = n => Math.round(n * 100) / 100;
@@ -131,7 +133,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '5.0';
+const VERSION_APP = '5.1';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -538,6 +540,7 @@ function arrancar() {
   ponerGuardia();
   window.addEventListener('popstate', alIrAtras);
   aplicarTema(LS.get('fin_tema', 'auto'));
+  aplicarDiscreto();
   try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => aplicarTema(LS.get('fin_tema', 'auto'))); } catch (e) {}
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     const tenia = !!navigator.serviceWorker.controller;
@@ -590,6 +593,7 @@ function ejecutarAccion() {
   if (a === 'gasto') abrirRegistro({});
   else if (a === 'pagar') { const pl = planDeuda(abonoMensual()); abrirRegistro({ tipo: 'Traspaso', aCuenta: pl.orden[0] ? pl.orden[0].c.nombre : null }); }
   else if (a === 'cuadrar') irA('Cuentas');
+  else if (a === 'metas') abrirMeta();
 }
 function mostrarSetup() {
   $('loading').classList.add('hide'); $('view').innerHTML = ''; $('nav').classList.add('hide');
@@ -914,9 +918,9 @@ function vistaMovs() {
     '<div id="lista">' + listaMovs() + '</div>';
 }
 function listaMovs() {
-  const q = BUSCA.trim().toLowerCase(), tipos = FILTROS[FILTRO];
+  const q = sinAcentos(BUSCA.trim()), tipos = FILTROS[FILTRO];
   const lista = DATA.movs.filter(m => (q || m.fecha.slice(0, 7) === MES) && (!tipos || tipos.indexOf(m.tipo) >= 0) &&
-    (!q || [m.desc, m.categoria, m.cuenta, m.aCuenta, m.persona, m.tipo, String(m.monto)].join(' ').toLowerCase().includes(q))).sort(ordenMov);
+    (!q || sinAcentos([m.desc, m.categoria, m.cuenta, m.aCuenta, m.persona, m.tipo, String(m.monto)].join(' ')).includes(q))).sort(ordenMov);
   if (!lista.length) return '<div class="list" style="margin-top:12px"><div class="empty">' + (q ? 'No encontré "' + esc(BUSCA.trim()) + '" en ningún mes.' : FILTRO !== 'Todos' ? 'Nada de este tipo en ' + nombreMes(MES) + '.' : 'Sin movimientos en ' + nombreMes(MES) + '.') + '</div></div>';
   let h = q ? '<div class="muted" style="margin:10px 2px 0">' + lista.length + ' resultado' + (lista.length === 1 ? '' : 's') + ' en todos los meses</div>' : '';
   const dias = {};
@@ -1210,7 +1214,9 @@ const GUIA = [
   ['💳', 'Gasto, Traspaso o Personas', '<b>Gasto</b>: compraste algo (con débito, efectivo o tarjeta).<br><b>Traspaso</b>: pagaste una tarjeta o moviste dinero entre cuentas; no es gasto.<br><b>Personas</b>: le prestaste a alguien, te pagó, o tú debes.'],
   ['🧾', 'Reembolsos y gastos divididos', 'Si pagaste por varios, activa <b>Dividir con otros</b>: tu parte es gasto y lo demás queda como "te deben". Si alguien te devuelve lo de algo, es <b>Ingreso → Es un reembolso</b>.'],
   ['⚖️', 'Cuadra cada domingo', 'En Cuentas toca una cuenta → <b>Cuadrar</b> y escribe lo que dice tu banco. Así nunca vuelves a perder la pista como de junio a septiembre.'],
-  ['📅', 'Tu quincena y tu deuda', 'Cuando registres tu quincena, Inicio te dice cuánto va a gastos y cuánto a deudas. En Análisis ves a dónde se va tu dinero mes con mes.']
+  ['📅', 'Tu quincena y tu deuda', 'Cuando registres tu quincena, Inicio te dice cuánto va a gastos y cuánto a deudas. En Análisis ves a dónde se va tu dinero mes con mes.'],
+  ['🏦', 'Tu BBVA Oro y los meses sin intereses', 'Los gastos salen con tu Oro para aprovechar hasta ~50 días de financiamiento. Si compras a meses, activa <b>A meses sin intereses</b>: al estado de cuenta solo entra la mensualidad. En Inicio ves cuánto pagar para no generar intereses.'],
+  ['🎯', 'Metas y proyección', 'Crea una <b>meta</b> para lo que quieres comprar y aparta cada quincena. En <b>Análisis → Categorías</b> ves en qué se fue tu dinero y la proyección te dice cómo vas a terminar el mes. El ojo de arriba oculta los montos.']
 ];
 function abrirGuia() { FORM = { vista: 'guia', paso: 0 }; abrirHoja(); pintarHoja(); enfocarTitulo(); }
 function hojaGuia() {
@@ -1228,11 +1234,14 @@ function abrirHoja() {
   if (!yaAbierta) {
     history.pushState({ hoja: true }, '');
     s.classList.remove('hide'); sc.classList.remove('hide');
+    fondoInerte(true);
     requestAnimationFrame(() => { s.classList.add('show'); sc.classList.add('show'); });
     document.body.style.overflow = 'hidden';
   }
   s.scrollTop = 0;
 }
+// Con una hoja o el candado abiertos, el lector de pantalla y el tabulador no se van a lo de atrás
+function fondoInerte(si) { ['.appbar', 'main', '#nav'].forEach(q => { const e = document.querySelector(q); if (e) e.inert = si; }); }
 // Cerrar desde un botón: regresa en el historial para que el botón Atrás de Android no saque de la app
 function cerrarHoja() { if (history.state && history.state.hoja) history.back(); else cerrarHojaReal(); }
 function cerrarHojaReal() {
@@ -1242,6 +1251,7 @@ function cerrarHojaReal() {
   const s = $('sheet'), sc = $('scrim');
   s.classList.remove('show'); sc.classList.remove('show'); s.style.transform = '';
   document.body.style.overflow = '';
+  fondoInerte(false);
   setTimeout(() => { if (!FORM) { s.classList.add('hide'); sc.classList.add('hide'); s.innerHTML = ''; } }, 260);
 }
 function pintarHoja() {
@@ -1528,7 +1538,13 @@ function guardarMovForm() {
     : (t === 'Gasto' || t === 'Ingreso' || t === 'Reembolso') && !FORM.categoria ? 'Elige una categoría.'
     : usaMSI() && !FORM.meses ? 'Elige a cuántos meses sin intereses.' : '';
   if (falta) { FORM.err = falta; pintarHoja(); vibrar([20, 40, 20]); return; }
-  const nuevo = !FORM.id;
+  const nuevo = !FORM.id, firma = t + '|' + monto + '|' + FORM.cuenta + '|' + FORM.fecha;
+  if (FORM.confirmado !== firma) {
+    const igual = nuevo && DATA.movs.find(m => m.tipo === t && m.monto === monto && m.cuenta === FORM.cuenta && m.fecha === FORM.fecha && Date.now() - (m.registrado || 0) < 15 * 60000);
+    const aviso = monto >= 50000 && t !== 'Ajuste' ? '¿Seguro que fueron ' + money(monto) + '? Revisa que no sobre un cero. Toca Guardar otra vez para confirmar.'
+      : igual ? 'Hace ' + Math.max(1, Math.round((Date.now() - igual.registrado) / 60000)) + ' min registraste lo mismo (' + money(monto) + ' con ' + FORM.cuenta + '). Si es otro, toca Guardar otra vez.' : '';
+    if (aviso) { FORM.confirmado = firma; FORM.err = aviso; pintarHoja(); vibrar([20, 40, 20]); return; }
+  }
   if (nuevaPersona) encolar('guardarPersona', [{ nombre: nuevaPersona, saldoCorte: 0, fechaCorte: minCorte() || hoy(), nota: '' }], true);
   if (t === 'Gasto' && nuevo && FORM.dividir && !usaMSI()) {
     const pr = partesDividir(monto);
@@ -1979,10 +1995,10 @@ let OCULTA_DESDE = 0;
 const bloqueoOn = () => NATIVO && LS.get('fin_huella', false);
 async function pedirHuella() {
   if (!bloqueoOn()) { $('lock').classList.add('hide'); return; }
-  $('lock').classList.remove('hide');
+  $('lock').classList.remove('hide'); fondoInerte(true);
   try {
     await window.Capacitor.nativePromise('NativeBiometric', 'verifyIdentity', { reason: 'Abrir Finanzas', title: 'Finanzas', subtitle: 'Usa tu huella para entrar', negativeButtonText: 'Cancelar', maxAttempts: 5 });
-    $('lock').classList.add('hide'); vibrar(12);
+    $('lock').classList.add('hide'); fondoInerte(!!FORM); vibrar(12);
   } catch (e) { /* se queda bloqueada; el botón vuelve a pedirla */ }
 }
 async function alternarHuella() {
@@ -1996,6 +2012,34 @@ async function alternarHuella() {
   } catch (e) { toast('No se activó el bloqueo'); }
   if (ok) { LS.set('fin_huella', true); toast('Listo: Finanzas pedirá tu huella al abrir'); }
   pintarHoja();
+}
+
+/* ---- Modo discreto: tapa los montos para usar la app en público o enseñar la pantalla ---- */
+function aplicarDiscreto() {
+  const on = LS.get('fin_discreto', false), b = $('ojo');
+  document.body.classList.toggle('discreto', on);
+  if (b) { b.setAttribute('aria-pressed', on); b.setAttribute('aria-label', on ? 'Mostrar montos' : 'Ocultar montos'); }
+}
+function alternarDiscreto() { LS.set('fin_discreto', !LS.get('fin_discreto', false)); aplicarDiscreto(); vibrar(8); toast(LS.get('fin_discreto', false) ? 'Montos ocultos' : 'Montos visibles'); }
+
+/* ---- Respaldo: todo vive en tu hoja de Google; además puedes bajar un CSV o una copia completa ---- */
+// Una celda que empieza con = + - @ se volvería fórmula al abrir el CSV en Excel o Sheets: se le antepone un apóstrofo
+const celdaCSV = v => { let t = v == null ? '' : String(v); if (/^[=+\-@]/.test(t) && !/^-?\d+(\.\d+)?$/.test(t)) t = "'" + t; return /[",\n;]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+function descargar(nombre, tipo, contenido) {
+  const url = URL.createObjectURL(new Blob([contenido], { type: tipo })), a = document.createElement('a');
+  a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function exportarCSV() {
+  const cols = ['fecha', 'tipo', 'monto', 'cuenta', 'aCuenta', 'categoria', 'persona', 'desc', 'meses'];
+  const filas = DATA.movs.slice().sort((a, b) => (a.fecha < b.fecha ? -1 : 1)).map(m => cols.map(k => celdaCSV(m[k])).join(','));
+  descargar('finanzas-movimientos-' + hoy() + '.csv', 'text/csv;charset=utf-8', '\ufeff' + ['Fecha,Tipo,Monto,Cuenta,A cuenta,Categoría,Persona,Descripción,Meses'].concat(filas).join('\n'));
+  toast('Descargué ' + DATA.movs.length + ' movimientos');
+}
+function exportarRespaldo() {
+  const copia = Object.assign({}, DATA, { exportado: new Date().toISOString(), app: VERSION_APP });
+  descargar('finanzas-respaldo-' + hoy() + '.json', 'application/json', JSON.stringify(copia, null, 1));
+  toast('Respaldo descargado');
 }
 
 /* ---- Ajustes ---- */
@@ -2030,6 +2074,9 @@ function hojaAjustes() {
       '<div class="actions"><a class="btn sm" href="' + APK_URL + '" target="_blank" rel="noopener">Descargar APK</a>' + (!DEMO ? '<button class="btn sm ghost" onclick="copiarLinkApp()">Copiar link para la app</button>' : '') + '</div>' +
       '<p class="hint">Abre la app, pega el link en "URL de Apps Script" y listo: no tienes que escribir la clave.</p></div>';
   }
+  h += '<div class="fl">Tus datos</div><div class="card flat"><div class="muted" style="margin-bottom:10px">Todo se guarda en tu hoja de Google; lo del celular es una copia para que funcione sin señal.</div><div class="actions">' +
+    (BASE && BASE.url ? '<a class="btn sm" href="' + esc(BASE.url) + '" target="_blank" rel="noopener">Abrir mi hoja</a>' : '') +
+    (!NATIVO ? '<button class="btn sm ghost" onclick="exportarCSV()">Bajar CSV</button><button class="btn sm ghost" onclick="exportarRespaldo()">Bajar respaldo</button>' : '') + '</div></div>';
   const ver = BASE && BASE.version ? BASE.version : 1;
   h += '<div class="fl">Conexión</div><div class="card flat"><div class="muted">' + (DEMO ? 'Estás en modo ejemplo: nada se guarda en tu hoja.' :
     'Conectada a ' + esc(BASE && BASE.hoja ? BASE.hoja : 'tu hoja de Google') + '. Última actualización: ' + haceCuanto(LS.get('fin_ultima', 0)) + '.') + '</div>' +

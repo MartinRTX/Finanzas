@@ -2,7 +2,7 @@
   "id": "./?app=finanzas-martin",
   "name": "Finanzas",
   "short_name": "Finanzas",
-  "description": "Gastos, ingresos, deudas y presupuesto de Martin",
+  "description": "Gastos, ingresos, tarjetas, metas y presupuesto de Martin",
   "lang": "es-MX",
   "start_url": "./?app=finanzas-martin",
   "scope": "./",
@@ -44,6 +44,18 @@
       ]
     },
     {
+      "name": "Metas de ahorro",
+      "short_name": "Metas",
+      "url": "./?accion=metas",
+      "icons": [
+        {
+          "src": "sc-metas.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
       "name": "Pagar tarjeta",
       "short_name": "Pagar",
       "url": "./?accion=pagar",
@@ -67,5 +79,14 @@
         }
       ]
     }
-  ]
+  ],
+  "categories": [
+    "finance",
+    "productivity"
+  ],
+  "dir": "ltr",
+  "display_override": [
+    "standalone"
+  ],
+  "prefer_related_applications": false
 }
