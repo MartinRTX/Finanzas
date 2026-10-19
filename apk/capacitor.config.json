@@ -1,0 +1,12 @@
+{
+  "appId": "com.martinrtx.finanzas",
+  "appName": "Finanzas",
+  "webDir": "www",
+  "server": {
+    "url": "https://martinrtx.github.io/Finanzas/",
+    "errorPath": "error.html"
+  },
+  "android": {
+    "backgroundColor": "#0A0F0D"
+  }
+}
