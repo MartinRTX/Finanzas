@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_descripcion">Lo que te queda de la quincena y botones para registrar un gasto o la foto de un ticket</string>
+    <string name="lector_descripcion">Detecta tus compras en las notificaciones de BBVA, Revolut, Mercado Pago y Nu para que las registres con un toque</string>
+</resources>

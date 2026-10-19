@@ -10,6 +10,11 @@ name: APK Android
 
 on:
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: 'Publicar el APK en Releases (apágalo para solo probar que compila)'
+        type: boolean
+        default: true
   push:
     branches: [main]
     paths:
@@ -64,6 +69,22 @@ jobs:
           grep -q 'USE_BIOMETRIC' "$M" || sed -i 's#<application#<uses-permission android:name="android.permission.USE_BIOMETRIC" />\n    <application#' "$M"
           grep -n "USE_BIOMETRIC" "$M"
 
+      - name: Código nativo de Finanzas (widget, lector de notificaciones de bancos y cámara)
+        run: |
+          J=android/app/src/main/java/com/martinrtx/finanzas
+          mkdir -p "$J" && cp native/java/*.java "$J"/
+          M=android/app/src/main/AndroidManifest.xml
+          python3 - "$M" native/manifest-application.xml <<'PY'
+          import sys
+          m, extra = open(sys.argv[1]).read(), open(sys.argv[2]).read()
+          if 'FinanzasWidget' not in m:
+              m = m.replace('</application>', extra + '    </application>', 1)
+          if 'android.permission.CAMERA' not in m:
+              m = m.replace('<application', '<uses-permission android:name="android.permission.CAMERA" />\n    <application', 1)
+          open(sys.argv[1], 'w').write(m)
+          PY
+          cat "$M"
+
       - name: Número de versión (sube solo en cada compilación)
         run: |
           sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/" android/app/build.gradle
@@ -99,6 +120,7 @@ jobs:
           rm -f llave.jks
 
       - name: Publicar en Releases
+        if: github.event_name == 'push' || inputs.publicar
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
