@@ -1,7 +1,9 @@
 # Compila el APK de la app Finanzas en los servidores de GitHub (no necesitas Android Studio).
 # Se corre solo cuando cambias algo en la carpeta apk/ o este archivo, o a mano desde la pestaña Actions.
 # Solo publica el APK desde main, para que lo que descargas sea siempre lo que ya está en tu página.
-# Resultado: en "Releases" del repo aparece Finanzas.apk para instalar desde el celular.
+# Resultado: en "Releases" del repo aparecen dos APK para instalar desde el celular:
+#  - Finanzas.apk: completo (con el lector de notificaciones de tus bancos).
+#  - Finanzas-ligero.apk: igual pero sin ese lector. Play Protect no lo marca como "puede robar datos sensibles".
 #
 # Firma: usa los secretos KEYSTORE_B64 y KEYSTORE_PASS (los mismos que pusiste en el repo Gym sirven).
 # Si no existen, firma con una llave temporal: el APK instala bien, pero para actualizarlo tendrías que
@@ -27,6 +29,9 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variante: [completo, ligero]
     defaults:
       run:
         working-directory: apk
@@ -69,18 +74,31 @@ jobs:
           grep -q 'USE_BIOMETRIC' "$M" || sed -i 's#<application#<uses-permission android:name="android.permission.USE_BIOMETRIC" />\n    <application#' "$M"
           grep -n "USE_BIOMETRIC" "$M"
 
-      - name: Código nativo de Finanzas (widget, lector de notificaciones de bancos y cámara)
+      - name: Código nativo de Finanzas (widgets, notificaciones, panel rápido, atajos, cámara y dictado)
+        env:
+          VARIANTE: ${{ matrix.variante }}
         run: |
           J=android/app/src/main/java/com/martinrtx/finanzas
           mkdir -p "$J" && cp native/java/*.java "$J"/
           M=android/app/src/main/AndroidManifest.xml
           python3 - "$M" native/manifest-application.xml <<'PY'
-          import sys
+          import os, re, sys
           m, extra = open(sys.argv[1]).read(), open(sys.argv[2]).read()
+          # La variante ligera no trae el lector de notificaciones de bancos
+          if os.environ.get('VARIANTE') == 'ligero':
+              extra = re.sub(r'<!--LECTOR-->.*?<!--/LECTOR-->', '', extra, flags=re.S)
           if 'FinanzasWidget' not in m:
               m = m.replace('</application>', extra + '    </application>', 1)
-          if 'android.permission.CAMERA' not in m:
-              m = m.replace('<application', '<uses-permission android:name="android.permission.CAMERA" />\n    <application', 1)
+          permisos = ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO', 'android.permission.RECEIVE_BOOT_COMPLETED']
+          for perm in permisos:
+              if perm not in m:
+                  m = m.replace('<application', '<uses-permission android:name="' + perm + '" />\n    <application', 1)
+          # Android 11+ necesita "ver" el servicio de reconocimiento de voz para dictar
+          if 'android.speech.RecognitionService' not in m:
+              m = m.replace('<application', '<queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>\n    <application', 1)
+          # Atajos al mantener presionado el ícono
+          if 'android.app.shortcuts' not in m:
+              m = re.sub(r'(<activity[^>]*MainActivity[^>]*>)', r'\1\n            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />', m, count=1, flags=re.S)
           open(sys.argv[1], 'w').write(m)
           PY
           cat "$M"
@@ -105,26 +123,44 @@ jobs:
           if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ]; then
             echo "$KS_B64" | base64 -d > llave.jks
             ALIAS=$(keytool -list -keystore llave.jks -storepass "$KS_PASS" | grep -i PrivateKeyEntry | head -1 | cut -d, -f1)
-            echo "FIRMA=tu llave ($ALIAS)" >> "$GITHUB_ENV"
+            FIRMA="tu llave ($ALIAS)"
           else
             echo "::warning::Faltan los secretos KEYSTORE_B64 y KEYSTORE_PASS: se firma con una llave temporal"
             KS_PASS=temporal123; ALIAS=finanzas
             keytool -genkeypair -keystore llave.jks -storepass "$KS_PASS" -keypass "$KS_PASS" -alias "$ALIAS" \
               -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Finanzas"
-            echo "FIRMA=una llave temporal (para actualizar, desinstala la anterior)" >> "$GITHUB_ENV"
+            FIRMA="una llave temporal (para actualizar, desinstala la anterior)"
           fi
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk alineado.apk
-          "$BT/apksigner" sign --ks llave.jks --ks-key-alias "$ALIAS" --ks-pass pass:"$KS_PASS" --key-pass pass:"$KS_PASS" --out Finanzas.apk alineado.apk
-          "$BT/apksigner" verify Finanzas.apk
+          NOMBRE=Finanzas.apk; [ "${{ matrix.variante }}" = ligero ] && NOMBRE=Finanzas-ligero.apk
+          "$BT/apksigner" sign --ks llave.jks --ks-key-alias "$ALIAS" --ks-pass pass:"$KS_PASS" --key-pass pass:"$KS_PASS" --out "$NOMBRE" alineado.apk
+          "$BT/apksigner" verify "$NOMBRE"
           rm -f llave.jks
+          echo "$FIRMA" > firma-${{ matrix.variante }}.txt
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ matrix.variante }}
+          path: |
+            apk/Finanzas*.apk
+            apk/firma-*.txt
+
+  publicar:
+    needs: apk
+    if: github.event_name == 'push' || inputs.publicar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
       - name: Publicar en Releases
-        if: github.event_name == 'push' || inputs.publicar
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          ls -la
+          FIRMA=$(cat firma-completo.txt)
           gh release delete apk --yes --cleanup-tag --repo "${{ github.repository }}" || true
-          gh release create apk Finanzas.apk --repo "${{ github.repository }}" \
+          gh release create apk Finanzas.apk Finanzas-ligero.apk --repo "${{ github.repository }}" \
             --title "App Finanzas para Android" \
-            --notes "Descarga Finanzas.apk desde el celular e instálala. Compilación ${{ github.run_number }}, firmada con ${FIRMA}. Las mejoras de la app llegan solas por GitHub Pages; solo vuelves a instalar si cambia la carpeta apk/."
+            --notes "Compilación ${{ github.run_number }}, firmada con ${FIRMA}. Finanzas.apk es la completa (lee las notificaciones de compra de tus bancos). Si Play Protect no te deja instalarla, usa Finanzas-ligero.apk: es igual pero sin ese lector. Las mejoras de la app llegan solas por GitHub Pages; solo vuelves a instalar si cambia la carpeta apk/."

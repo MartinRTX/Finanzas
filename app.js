@@ -1,4 +1,4 @@
-/* Finanzas v6.0 – app instalable de Martin (PWA y APK de Android con Capacitor).
+/* Finanzas v7.0 – app instalable de Martin (PWA y APK de Android con Capacitor).
  * Lee y escribe la hoja "Mis finanzas 2026" a través de Apps Script (la "API").
  * Lo que registras se guarda primero en el celular y se sube en cuanto hay señal.
  * Pestañas de la hoja: Registro, Cuentas, Categorías, Personas, Fijos y Config.
@@ -133,7 +133,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '6.0';
+const VERSION_APP = '7.0';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -629,12 +629,12 @@ function pintar() {
   $('loading').classList.add('hide'); $('setup').classList.add('hide'); $('nav').classList.remove('hide');
   document.querySelectorAll('nav.tabs [data-tab]').forEach(b => { const on = b.dataset.tab === TAB; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   $('titulo').textContent = TAB === 'Inicio' ? 'Finanzas' : TAB;
-  const foco = document.activeElement && document.activeElement.id === 'buscar';
+  const foco = document.activeElement && ['buscar', 'rapido'].indexOf(document.activeElement.id) >= 0 ? document.activeElement.id : null;
   $('view').innerHTML = TAB === 'Inicio' ? vistaInicio() : TAB === 'Movimientos' ? vistaMovs() : TAB === 'Análisis' ? vistaAnalisis() : vistaCuentas();
   // En Análisis, la pestaña elegida siempre a la vista aunque esté al final de la fila
   const chipOn = document.querySelector('#view [aria-label="Análisis"] .chip.on');
   if (chipOn) chipOn.parentNode.scrollLeft = chipOn.offsetLeft - 16;
-  if (foco && $('buscar')) { const b = $('buscar'); b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
+  if (foco && $(foco)) { const b = $(foco); b.focus(); b.setSelectionRange(b.value.length, b.value.length); }
   pintarSync();
   if (FORM) pintarHoja();
   programarWidget();
@@ -783,6 +783,7 @@ function vistaInicio() {
   h += '<div class="streak"><span>' + (ra ? '🔥 <b>' + ra + (ra === 1 ? ' día</b> registrando' : ' días</b> seguidos registrando') : 'Empieza tu racha: registra hoy') + '</span>' +
     (!hoyCon ? '<button class="btn sm ghost" onclick="hoyNoGaste()">Hoy no gasté</button>' : '<span class="muted">Hoy ✓</span>') + '</div>';
 
+  h += barraRapida();
   h += accionesRapidas();
   h += tarjetaRechazados();
   h += tarjetaDetectados();
@@ -1438,7 +1439,10 @@ function hojaMov() {
     const fs = DATA.fijos.filter(f => fijoVigente(f) && f.tipo === t).sort((a, b) => usados.has(a.id) - usados.has(b.id));
     if (fs.length) h += '<div class="quick" role="group" aria-label="Pagos fijos">' + fs.map(f => '<button class="' + (usados.has(f.id) ? 'done' : '') + '" onclick="aplicarFijo(\'' + jsq(f.id) + '\')">' +
       (usados.has(f.id) ? '✓ ' : '') + esc(f.nombre) + ' ' + money(f.monto, f.monto % 1 === 0) + '</button>').join('') + '</div>';
+    const favs = t === 'Gasto' ? favoritos() : [];
+    if (favs.length) h += '<div class="quick" role="group" aria-label="Tus gastos frecuentes">' + favs.map((f, i) => '<button class="fav" onclick="aplicarFavorito(' + i + ')">' + esc(etiquetaFav(f)) + '</button>').join('') + '</div>';
   }
+  if (!ed) h += '<button class="dictar-form" onclick="dictar(\'form\')">' + ICON_MIC + ' Dictar: "650 gasolina débito ayer"</button>';
   h += '<label class="amount"><span aria-hidden="true">$</span><input id="fMonto" inputmode="decimal" enterkeyhint="done" autocomplete="off" placeholder="0.00" value="' + esc(FORM.monto) +
     '" oninput="if(FORM){FORM.monto=this.value;verCalc()}" onkeydown="if(event.key===\'Enter\')this.blur()" aria-label="Monto"></label><div class="calc" id="calc">' + textoCalc(FORM.monto) + '</div>';
 
@@ -2085,10 +2089,10 @@ function hojaAjustes() {
     '<p class="hint">Es la que aparece elegida cada vez que registras un gasto. Pagar con crédito y liquidar el total antes de la fecha límite te da hasta ~50 días de financiamiento sin intereses.</p>';
   h += htmlFunciones();
   h += '<div class="fl">Tema</div><div class="seg" role="group" aria-label="Tema">' + TEMAS.map(x => '<button class="' + (tema === x[0] ? 'on' : '') + '" aria-pressed="' + (tema === x[0]) + '" onclick="elegirTema(\'' + x[0] + '\')">' + x[1] + '</button>').join('') + '</div>';
-  h += '<div class="fl">Recordatorios</div>';
+  h += '<div class="fl">Notificaciones</div>';
   if (NATIVO) {
     h += sw(av.pagos, "alternarAviso('pagos')", 'Pagos de tarjetas', '2 días antes y el día límite, con lo que tienes que pagar para no generar intereses. También te avisa cuando corta tu tarjeta para gastos.') +
-      sw(av.diario, "alternarAviso('diario')", 'Recordatorio para registrar', 'Un aviso al día si todavía no registras nada.');
+      sw(av.diario, "alternarAviso('diario')", '🌙 Recordatorio en la noche', 'Si ese día no registraste nada, te pregunta "¿Gastaste algo hoy?" y le contestas ahí mismo ("120 tacos") o tocas No gasté.') + htmlNotificaciones();
     h += '<div class="fl">Seguridad</div>' + sw(LS.get('fin_huella', false), 'alternarHuella()', 'Bloqueo con huella', 'Pide tu huella al abrir la app y al volver después de un minuto.');
     if (av.diario) h += '<div class="row between" style="margin-top:8px"><label for="fHora" class="muted">Hora del recordatorio</label><input id="fHora" type="time" class="inp" style="width:auto" value="' + esc(av.hora) + '" onchange="horaAviso(this.value)"></div>';
   } else {
@@ -2129,9 +2133,9 @@ async function alternarAviso(k) {
     const p = await nativo('LocalNotifications', 'requestPermissions');
     if (!p || p.display !== 'granted') { cfg[k] = false; toast('Permite las notificaciones de Finanzas en los ajustes de Android'); }
   }
-  LS.set('fin_avisos', cfg); vibrar(8); pintarHoja(); programarAvisos();
+  LS.set('fin_avisos', cfg); vibrar(8); pintarHoja(); programarAvisos(); aplicarNotifNativas();
 }
-function horaAviso(v) { if (!/^\d{2}:\d{2}$/.test(v)) return; const cfg = avisosCfg(); cfg.hora = v; LS.set('fin_avisos', cfg); programarAvisos(); toast('Te recuerdo a las ' + v); }
+function horaAviso(v) { if (!/^\d{2}:\d{2}$/.test(v)) return; const cfg = avisosCfg(); cfg.hora = v; LS.set('fin_avisos', cfg); programarAvisos(); aplicarNotifNativas(); toast('Te recuerdo a las ' + v); }
 let programando = false;
 async function programarAvisos() {
   if (!NATIVO || !DATA || programando) return;
@@ -2146,7 +2150,7 @@ async function programarAvisos() {
     if (!perm || perm.display !== 'granted') return;
     await nativo('LocalNotifications', 'createChannel', { id: 'finanzas', name: 'Pagos y recordatorios', description: 'Fechas límite de tus tarjetas y recordatorio para registrar', importance: 4, visibility: 1, vibration: true });
     const ns = [], ahora = Date.now();
-    const agenda = (id, fecha, hora, title, body) => { const d = new Date(fecha + 'T' + hora + ':00'); if (d.getTime() > ahora + 60000) ns.push({ id, title, body, channelId: 'finanzas', schedule: { at: d, allowWhileIdle: true } }); };
+    const agenda = (id, fecha, hora, title, body) => { const d = new Date(fecha + 'T' + hora + ':00'); if (d.getTime() > ahora + 60000) ns.push({ id, title, body, channelId: 'finanzas', smallIcon: 'ic_notif', iconColor: '#0D7A5E', schedule: { at: d, allowWhileIdle: true } }); };
     if (cfg.pagos) {
       DATA.cuentas.filter(c => esDeuda(c) && c.diaPago && !c.archivada).forEach((c, i) => {
         const ps = pagoSinIntereses(c), deuda = -saldo(c);
@@ -2158,10 +2162,7 @@ async function programarAvisos() {
       const g = DATA.cuentas.find(c => c.nombre === cuentaGastos()), ci = g && esDeuda(g) && cicloTarjeta(g, hoy());
       if (ci) agenda(1900, ci.corte, '20:00', 'Hoy corta tu ' + g.nombre, 'Desde mañana tus compras se pagan hasta el ' + fechaCorta(cicloTarjeta(g, ci.mejor).pago) + ': el mejor momento para compras grandes.');
     }
-    if (cfg.diario) {
-      const hechos = new Set(DATA.movs.map(m => m.fecha).concat(LS.get('fin_singasto', [])));
-      for (let k = 0; k < 7; k++) { const f = sumarDias(hoy(), k); if (!hechos.has(f)) agenda(2000 + k, f, cfg.hora, '¿Gastaste algo hoy?', 'Regístralo en 10 segundos para que tu presupuesto cuadre.'); }
-    }
+    // El recordatorio de la noche lo pone el código nativo (deja contestar en la notificación): ver aplicarNotifNativas()
     if (ns.length) await nativo('LocalNotifications', 'schedule', { notifications: ns });
   } finally { programando = false; }
 }

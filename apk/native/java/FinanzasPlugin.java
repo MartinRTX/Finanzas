@@ -11,6 +11,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 // Puente entre la app web y lo nativo: datos del widget, acción pendiente del widget
 // y los gastos que detectó el lector de notificaciones de los bancos.
@@ -30,8 +31,11 @@ public class FinanzasPlugin extends Plugin {
         e.putString("w_sub", call.getString("sub", ""));
         e.putString("w_sub2", call.getString("sub2", ""));
         e.putBoolean("w_rojo", Boolean.TRUE.equals(call.getBoolean("rojo", false)));
+        e.putString("w_favs", call.getString("favs", "[]"));
+        if (Boolean.TRUE.equals(call.getBoolean("registradoHoy", false))) e.putString("ultimo_dia", AccionesReceiver.hoy());
         e.apply();
         FinanzasWidget.actualizarTodos(getContext());
+        AtajosWidget.actualizarTodos(getContext());
         call.resolve();
     }
 
@@ -51,8 +55,42 @@ public class FinanzasPlugin extends Plugin {
         String cola = p.getString(LectorNotificaciones.COLA, "[]");
         p.edit().putString(LectorNotificaciones.COLA, "[]").apply();
         JSObject r = new JSObject();
+        JSONArray lista;
+        try { lista = new JSONArray(cola); } catch (Exception ex) { lista = new JSONArray(); }
+        // La app ya los muestra en Inicio: se quitan sus notificaciones
+        for (int i = 0; i < lista.length(); i++) {
+            JSONObject o = lista.optJSONObject(i);
+            if (o != null && o.has("id")) Notificaciones.cancelar(getContext(), Notificaciones.idDetectado(o.optString("id")));
+        }
+        r.put("lista", lista);
+        call.resolve(r);
+    }
+
+    // Lo que escribiste en las notificaciones o tocaste en el widget de atajos
+    @PluginMethod
+    public void rapidos(PluginCall call) {
+        SharedPreferences p = prefs(getContext());
+        String cola = p.getString(AccionesReceiver.RAPIDOS, "[]");
+        p.edit().putString(AccionesReceiver.RAPIDOS, "[]").apply();
+        JSObject r = new JSObject();
         try { r.put("lista", new JSONArray(cola)); } catch (Exception ex) { r.put("lista", new JSONArray()); }
         call.resolve(r);
+    }
+
+    // Prende o apaga la notificación de registro rápido, el aviso de compras detectadas y el recordatorio de la noche
+    @PluginMethod
+    public void configurar(PluginCall call) {
+        SharedPreferences.Editor e = prefs(getContext()).edit();
+        boolean rapida = Boolean.TRUE.equals(call.getBoolean("rapida", false));
+        e.putBoolean("rapida_activa", rapida);
+        e.putBoolean("avisar_detectados", !Boolean.FALSE.equals(call.getBoolean("detectados", true)));
+        e.putBoolean("rec_activo", Boolean.TRUE.equals(call.getBoolean("recordatorio", false)));
+        e.putInt("rec_hora", call.getInt("hora", 21));
+        e.putInt("rec_minuto", call.getInt("minuto", 0));
+        e.apply();
+        if (rapida) Notificaciones.mostrarRapida(getContext(), null); else Notificaciones.cancelar(getContext(), Notificaciones.ID_RAPIDA);
+        Notificaciones.programarRecordatorio(getContext());
+        call.resolve();
     }
 
     @PluginMethod

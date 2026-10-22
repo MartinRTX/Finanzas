@@ -8,6 +8,8 @@ import android.service.notification.StatusBarNotification;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -16,6 +18,8 @@ import org.json.JSONObject;
 // Android pide que actives el permiso a mano: Ajustes > Notificaciones > Acceso a notificaciones > Finanzas.
 public class LectorNotificaciones extends NotificationListenerService {
     static final String COLA = "detectados";
+    static final Pattern MONTO = Pattern.compile("(\\$\\s?[\\d.,]+\\d|[\\d.,]+\\d\\s?(MXN|EUR|USD|€))");
+    static final Pattern COMERCIO = Pattern.compile("\\b(?:en|at)\\s+([A-Z0-9][^,.\\n$]{1,40}?)(?=\\s+(?:con|por|el|with|on)\\b|[,.\\n]|$)");
     static final Set<String> BANCOS = new HashSet<>(Arrays.asList(
         "com.bancomer.mbanking", "com.bbva.bbvacontigo", "com.bbva.mx.bancomermovil",
         "com.revolut.revolut", "com.mercadopago.wallet", "com.nu.production"));
@@ -47,6 +51,14 @@ public class LectorNotificaciones extends NotificationListenerService {
             cola.put(n);
             while (cola.length() > 60) cola.remove(0);
             p.edit().putString(COLA, cola.toString()).apply();
+            // Te pregunta en una notificación propia si la registras (con botones Registrar / Editar / No es gasto)
+            if (p.getBoolean("avisar_detectados", true)) {
+                Matcher m = MONTO.matcher(todo);
+                String monto = m.find() ? m.group().trim() : "";
+                Matcher c = COMERCIO.matcher(todo);
+                String donde = c.find() ? " en " + c.group(1).trim() : "";
+                Notificaciones.mostrarDetectado(this, n.getString("id"), "¿Registrar " + (monto.isEmpty() ? "esta compra" : monto) + donde + "?", todo);
+            }
         } catch (Exception ignorado) { }
     }
 

@@ -26,7 +26,7 @@ function htmlFunciones() {
   return '<div class="fl">Funciones</div><p class="hint" style="margin-top:-2px">Apaga lo que no uses y desaparece de la app.</p>' + FUNCIONES.map(([k, ic, t, d, apk]) =>
     '<button class="switch" role="switch" aria-checked="' + fx(k) + '" onclick="alternarFuncion(\'' + k + '\')"><span><b>' + ic + ' ' + t + '</b><br><span class="muted">' + d +
     (apk && !NATIVO ? ' Solo en la app de Android.' : '') + '</span></span><span class="knob" aria-hidden="true"></span></button>').join('') +
-    (NATIVO && fx('widget') ? '<div class="card flat" style="margin-top:10px"><div class="t1">🧩 Agregar el widget</div><div class="muted" style="margin:4px 0 8px">Mantén presionada tu pantalla de inicio → Widgets → Finanzas, y arrástralo.</div>' +
+    (NATIVO && fx('widget') ? '<div class="card flat" style="margin-top:10px"><div class="t1">🧩 Agregar los widgets</div><div class="muted" style="margin:4px 0 8px">Mantén presionada tu pantalla de inicio → Widgets → Finanzas. Hay dos: <b>Finanzas</b> (lo que te queda, con + y Ticket) y <b>Finanzas: atajos</b> (tus gastos frecuentes: un toque y quedan anotados, sin abrir la app).</div>' +
       '<button class="switch" role="switch" aria-checked="' + LS.get('fin_widget_discreto', false) + '" onclick="LS.set(\'fin_widget_discreto\',!LS.get(\'fin_widget_discreto\',false));enviarWidget();pintarHoja()" style="margin-top:0"><span><b>Ocultar montos en el widget</b><br><span class="muted">Para que nadie vea tus números en tu pantalla.</span></span><span class="knob" aria-hidden="true"></span></button></div>' : '') +
     (NATIVO && fx('lector') ? '<div class="card flat" style="margin-top:10px" id="lectorEstado"><div class="t1">🔔 Permiso para leer notificaciones</div><div class="muted" style="margin:4px 0 8px">' +
       (LECTOR_ACTIVO ? '✓ Activo. Solo lee notificaciones de tus bancos; nada sale de tu celular.' : 'Android pide que lo actives a mano: Acceso a notificaciones → Finanzas → Permitir.') + '</div>' +
@@ -589,7 +589,9 @@ function enviarWidget() {
     etiqueta: queda >= 0 ? 'Te quedan esta quincena' : 'Te pasaste esta quincena',
     monto: oculto ? '$ ••••' : money(Math.abs(queda), true), rojo: queda < 0,
     sub: ci ? g.nombre + ': compra hoy, pagas el ' + fechaCorta(ci.pago) + ' (' + ci.dias + ' días)' : '',
-    sub2: ps && ps.falta > 0.5 ? 'Paga ' + (oculto ? '••••' : money(ps.falta, true)) + ' antes del ' + fechaCorta(ps.limite) : (racha() ? '🔥 ' + racha() + ' días registrando' : '') });
+    sub2: ps && ps.falta > 0.5 ? 'Paga ' + (oculto ? '••••' : money(ps.falta, true)) + ' antes del ' + fechaCorta(ps.limite) : (racha() ? '🔥 ' + racha() + ' días registrando' : ''),
+    favs: JSON.stringify(favoritosWidget()),
+    registradoHoy: DATA.movs.some(m => m.fecha === hoy()) || LS.get('fin_singasto', []).indexOf(hoy()) >= 0 });
 }
 
 /* ===================== Gastos detectados en notificaciones (APK) ===================== */
@@ -599,15 +601,27 @@ async function revisarLector() {
   const a = await nativo('Finanzas', 'lectorActivo');
   LECTOR_ACTIVO = !!(a && a.activo);
   const d = await nativo('Finanzas', 'detectados');
-  if (d && d.lista && d.lista.length) { agregarDetectados(d.lista); if (DATA) pintar(); }
+  if (!d || !d.lista || !d.lista.length) return;
+  // Los que confirmaste con "Registrar" en la notificación se guardan solos; los demás quedan en Inicio para revisar
+  let solos = 0;
+  d.lista.filter(x => x.confirmado).forEach(x => { const n = leerNotificacion(x); if (n && registrarDetectadoSolo(n)) solos++; else if (n) agregarDetectados([x]); });
+  agregarDetectados(d.lista.filter(x => !x.confirmado));
+  if (DATA) pintar();
+  if (solos) toast('Registré ' + solos + (solos === 1 ? ' compra' : ' compras') + ' que confirmaste en la notificación');
 }
 // Al abrir o volver a la app: la acción que pidió el widget (+ o Ticket) y los gastos detectados
 async function revisarNativo() {
   if (!NATIVO || !DATA) return;
   const a = await nativo('Finanzas', 'accionPendiente');
-  if (a && a.accion === 'gasto') abrirRegistro({});
-  else if (a && a.accion === 'ticket') abrirHojaTicket();
-  revisarLector();
+  const ac = a && a.accion;
+  if (ac === 'gasto') abrirRegistro({});
+  else if (ac === 'ticket') abrirHojaTicket();
+  else if (ac === 'dictar') { if (TAB !== 'Inicio') irA('Inicio'); dictar('barra'); }
+  else if (ac && /^plantilla:\d+$/.test(ac)) { const f = favoritos()[+ac.split(':')[1]]; if (f) abrirRegistro({ tipo: 'Gasto', desc: f.desc, categoria: f.cat, cuenta: f.cuenta, monto: f.monto || '' }); }
+  else if (ac === 'detectado' && TAB !== 'Inicio') irA('Inicio');
+  if (!revisarNativo.listo) { revisarNativo.listo = true; aplicarNotifNativas(); }
+  await revisarLector();
+  await revisarRapidos();
 }
 const APPS_BANCO = { 'com.bancomer.mbanking': 'BBVA', 'com.bbva.bbvacontigo': 'BBVA', 'com.bbva.mx.bancomermovil': 'BBVA', 'com.revolut.revolut': 'Revolut', 'com.mercadopago.wallet': 'Mercado Pago', 'com.nu.production': 'Nu' };
 function leerNotificacion(n) {
@@ -639,12 +653,13 @@ function tarjetaDetectados() {
   if (!ds.length) return '';
   return '<h2>Detecté en tus notificaciones<button class="more" onclick="LS.set(\'fin_detectados\',[]);pintar()">Descartar todo</button></h2><div class="list" style="margin-bottom:12px">' + ds.slice().reverse().slice(0, 4).map(d =>
     '<div class="mv"><span class="ic" aria-hidden="true">🔔</span><span class="tx"><div class="d1">' + esc(d.comercio || d.banco) + '</div><div class="d2">' + esc(d.banco) + ' · ' + haceCuanto(d.cuando) + (d.otraMoneda ? ' · otra moneda' : '') + '</div></span>' +
-    '<span class="m num' + (d.tipo === 'Gasto' ? '' : ' in') + '">' + (d.tipo === 'Gasto' ? '−' : '+') + money(d.monto) + '</span></div>' +
+    '<span class="m num' + (d.tipo === 'Gasto' ? '' : ' in') + '">' + (d.monto > 0 ? (d.tipo === 'Gasto' ? '−' : '+') + money(d.monto) : '¿?') + '</span></div>' +
     '<div class="det-acc"><button class="btn sm" onclick="registrarDetectado(\'' + jsq(d.id) + '\')">Registrar</button><button class="btn sm ghost" onclick="descartarDetectado(\'' + jsq(d.id) + '\')">No es gasto</button></div>').join('') + '</div>' +
     (ds.length > 4 ? '<p class="hint" style="margin-top:-6px">Y ' + (ds.length - 4) + ' más.</p>' : '');
 }
 function registrarDetectado(id) {
   const d = LS.get('fin_detectados', []).find(x => x.id === id); if (!d) return;
+  if (d.linea) { const e = entenderLinea(d.linea, claveDia(new Date(d.cuando))) || {}; return abrirRegistro({ tipo: e.tipo || 'Gasto', monto: e.monto || '', desc: e.desc || d.linea, categoria: e.categoria, cuenta: e.cuenta, aCuenta: e.aCuenta, persona: e.persona, fecha: e.fecha, detectado: id }); }
   abrirRegistro({ tipo: d.tipo, monto: d.monto, desc: d.comercio, cuenta: d.cuenta, categoria: adivinarCategoria(d.comercio, d.tipo === 'Ingreso' ? 'Ingreso' : 'Gasto'), fecha: claveDia(new Date(d.cuando)), detectado: id, leido: true });
 }
 function descartarDetectado(id) { LS.set('fin_detectados', LS.get('fin_detectados', []).filter(x => x.id !== id)); vibrar(8); pintar(); }

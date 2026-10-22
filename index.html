@@ -436,6 +436,23 @@
   .chip.mini { padding: 6px 10px; min-height: 34px; font-size: 12.5px; }
   .det-acc { display: flex; gap: 8px; padding: 0 14px 12px 66px; }
   .det-acc .btn { flex: 1; }
+  /* v7: registrar en una línea, favoritos y dictado */
+  .rapido-bar { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
+  .rapido-bar .inp { flex: 1; min-width: 0; border-radius: 16px; min-height: 50px; font-size: 16px; box-shadow: var(--shadow); }
+  .rapido-bar .iconbtn { width: 50px; height: 50px; border-radius: 16px; }
+  .rapido-bar .enviar { background: linear-gradient(135deg, var(--pri), var(--pri-2)); color: var(--on-pri); border: 0; }
+  .rapido-prev { min-height: 22px; margin: 0 4px 10px; font-size: 13.5px; }
+  .rapido-prev .prev { background: none; border: 0; padding: 4px 0; text-align: left; font-weight: 650; color: var(--muted); min-height: 32px; }
+  .rapido-prev .prev.ok { color: var(--pri); }
+  .favs { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px 2px; scrollbar-width: none; }
+  .favs::-webkit-scrollbar { display: none; }
+  .favs button { flex: none; border: 1px solid var(--line); background: var(--card2); border-radius: 99px; padding: 9px 14px; min-height: 44px; font-size: 14px; font-weight: 650; }
+  .quick button.fav { border-style: solid; border-color: var(--line); color: var(--ink); background: var(--card2); }
+  .dictar-form { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: center; border: 1px dashed var(--line); background: var(--card); color: var(--muted); border-radius: 14px; min-height: 44px; margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+  .dictar-form svg, .rapido-bar svg { width: 21px; height: 21px; }
+  .escuchando .rapido-bar .iconbtn:not(.enviar), .escuchando .dictar-form { background: var(--debt-weak); color: var(--debt); border-color: var(--debt); animation: late 1s ease-in-out infinite; }
+  @keyframes late { 50% { transform: scale(1.06); } }
+  @media (prefers-reduced-motion: reduce) { .escuchando .rapido-bar .iconbtn, .escuchando .dictar-form { animation: none; } }
   @media (max-width: 360px) { .dona-wrap { grid-template-columns: 1fr; justify-items: center; } }
   @media (max-width: 360px) { .actgrid { grid-template-columns: 1fr 1fr; } .hero .big { font-size: 40px; } }
 </style>
@@ -477,5 +494,6 @@
   <p class="muted" style="margin:0 0 18px">Usa tu huella para ver tus cuentas.</p><button class="btn" onclick="pedirHuella()">Desbloquear con huella</button></div></div>
 <script src="app.js"></script>
 <script src="extras.js"></script>
+<script src="rapido.js"></script>
 </body>
 </html>
