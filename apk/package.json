@@ -2,14 +2,15 @@
   "name": "finanzas-apk",
   "private": true,
   "version": "1.0.0",
-  "description": "Cascarón nativo (Capacitor) de la app Finanzas: carga https://martinrtx.github.io/Finanzas/ y agrega vibración, recordatorios de pago, bloqueo con huella y el gesto atrás nativos",
+  "description": "Cascarón nativo (Capacitor) de la app Finanzas: carga https://martinrtx.github.io/Finanzas/ y agrega vibración, recordatorios de pago, bloqueo con huella, dictado, widgets, notificaciones con respuesta y el gesto atrás nativos",
   "dependencies": {
     "@capacitor/android": "8.5.3",
     "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.5.3",
     "@capacitor/haptics": "8.0.2",
     "@capacitor/local-notifications": "8.3.1",
-    "@capgo/capacitor-native-biometric": "8.7.0"
+    "@capgo/capacitor-native-biometric": "8.7.0",
+    "@capgo/capacitor-speech-recognition": "8.3.3"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3"

@@ -2,4 +2,11 @@
 <resources>
     <string name="widget_descripcion">Lo que te queda de la quincena y botones para registrar un gasto o la foto de un ticket</string>
     <string name="lector_descripcion">Detecta tus compras en las notificaciones de BBVA, Revolut, Mercado Pago y Nu para que las registres con un toque</string>
+    <string name="atajos_descripcion">Tus gastos más frecuentes: un toque y quedan anotados</string>
+    <string name="sc_gasto">Gasto</string>
+    <string name="sc_gasto_largo">Registrar gasto</string>
+    <string name="sc_dictar">Dictar</string>
+    <string name="sc_dictar_largo">Dictar un gasto</string>
+    <string name="sc_ticket">Ticket</string>
+    <string name="sc_ticket_largo">Foto del ticket</string>
 </resources>

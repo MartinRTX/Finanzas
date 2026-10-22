@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Atajos al mantener presionado el ícono de Finanzas -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="gasto" android:enabled="true" android:icon="@drawable/sc_gasto"
+        android:shortcutShortLabel="@string/sc_gasto" android:shortcutLongLabel="@string/sc_gasto_largo">
+        <intent android:action="finanzas.gasto" android:targetPackage="com.martinrtx.finanzas" android:targetClass="com.martinrtx.finanzas.MainActivity">
+            <extra android:name="finanzas_accion" android:value="gasto" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="dictar" android:enabled="true" android:icon="@drawable/sc_dictar"
+        android:shortcutShortLabel="@string/sc_dictar" android:shortcutLongLabel="@string/sc_dictar_largo">
+        <intent android:action="finanzas.dictar" android:targetPackage="com.martinrtx.finanzas" android:targetClass="com.martinrtx.finanzas.MainActivity">
+            <extra android:name="finanzas_accion" android:value="dictar" />
+        </intent>
+    </shortcut>
+    <shortcut android:shortcutId="ticket" android:enabled="true" android:icon="@drawable/sc_ticket"
+        android:shortcutShortLabel="@string/sc_ticket" android:shortcutLongLabel="@string/sc_ticket_largo">
+        <intent android:action="finanzas.ticket" android:targetPackage="com.martinrtx.finanzas" android:targetClass="com.martinrtx.finanzas.MainActivity">
+            <extra android:name="finanzas_accion" android:value="ticket" />
+        </intent>
+    </shortcut>
+</shortcuts>
