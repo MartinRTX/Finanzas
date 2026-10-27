@@ -133,7 +133,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '7.0';
+const VERSION_APP = '7.1';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -558,7 +558,7 @@ function arrancar() {
   if (bloqueoOn()) pedirHuella();
   if (!(API && KEY) && !DEMO) return mostrarSetup();
   BASE = LS.get('fin_base', null);
-  if (BASE) { normalizar(BASE); recalcular(); pintar(); ejecutarAccion(); }
+  if (BASE) { normalizar(BASE); recalcular(); pintar(); ejecutarAccion(); revisarNativo(); }
   actualizar().then(() => { ejecutarAccion(); revisarNativo(); if (!LS.get('fin_guia', false) && !FORM) abrirGuia(); });
   enviar();
   window.addEventListener('online', () => { pintarSync(); enviar(); });
@@ -567,6 +567,8 @@ function arrancar() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { guardarBorrador(); programarAvisos(); OCULTA_DESDE = Date.now(); return; }
     if (bloqueoOn() && OCULTA_DESDE && Date.now() - OCULTA_DESDE > 60000) pedirHuella();
+    if (FORM && !$('sheet').classList.contains('show')) { $('sheet').classList.remove('hide'); $('scrim').classList.remove('hide'); $('sheet').classList.add('show'); $('scrim').classList.add('show'); pintarHoja(); }
+    if (!FORM) fondoInerte(false);
     enviar(); if (!FORM) actualizar(); revisarNativo();
   });
   setInterval(enviar, 30000);
@@ -623,14 +625,24 @@ function salirDemo() {
 }
 
 /* ===================== Pintar ===================== */
-function irA(t) { TAB = t; if (t !== 'Movimientos') { FILTRO = 'Todos'; } pintar(); window.scrollTo(0, 0); }
+function irA(t) {
+  TAB = t; if (t !== 'Movimientos') { FILTRO = 'Todos'; }
+  const v = $('view');
+  if (document.visibilityState === 'visible') { v.classList.remove('anima'); void v.offsetWidth; v.classList.add('anima'); }
+  pintar(); window.scrollTo(0, 0);
+}
 function pintar() {
   if (!DATA) return;
   $('loading').classList.add('hide'); $('setup').classList.add('hide'); $('nav').classList.remove('hide');
   document.querySelectorAll('nav.tabs [data-tab]').forEach(b => { const on = b.dataset.tab === TAB; b.classList.toggle('on', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   $('titulo').textContent = TAB === 'Inicio' ? 'Finanzas' : TAB;
   const foco = document.activeElement && ['buscar', 'rapido'].indexOf(document.activeElement.id) >= 0 ? document.activeElement.id : null;
-  $('view').innerHTML = TAB === 'Inicio' ? vistaInicio() : TAB === 'Movimientos' ? vistaMovs() : TAB === 'Análisis' ? vistaAnalisis() : vistaCuentas();
+  // Si algo falla al armar la pantalla, se avisa en lugar de dejarla en negro
+  try { $('view').innerHTML = TAB === 'Inicio' ? vistaInicio() : TAB === 'Movimientos' ? vistaMovs() : TAB === 'Análisis' ? vistaAnalisis() : vistaCuentas(); }
+  catch (e) {
+    console.error(e);
+    $('view').innerHTML = '<div class="center"><div><div class="t1">No pude mostrar esta pantalla</div><p class="muted">' + esc(e && e.message) + '</p><button class="btn" onclick="location.reload()">Recargar</button></div></div>';
+  }
   // En Análisis, la pestaña elegida siempre a la vista aunque esté al final de la fila
   const chipOn = document.querySelector('#view [aria-label="Análisis"] .chip.on');
   if (chipOn) chipOn.parentNode.scrollLeft = chipOn.offsetLeft - 16;
@@ -1252,7 +1264,12 @@ function abrirHoja() {
     history.pushState({ hoja: true }, '');
     s.classList.remove('hide'); sc.classList.remove('hide');
     fondoInerte(true);
-    requestAnimationFrame(() => { s.classList.add('show'); sc.classList.add('show'); });
+    // Si la app se está abriendo detrás de otra pantalla (notificación, widget), se muestra sin animación:
+    // con requestAnimationFrame congelado la hoja se quedaba escondida y lo de atrás bloqueado
+    if (document.visibilityState !== 'visible') s.classList.add('drag');
+    void s.offsetWidth;
+    s.classList.add('show'); sc.classList.add('show');
+    setTimeout(() => s.classList.remove('drag'), 50);
     document.body.style.overflow = 'hidden';
   }
   s.scrollTop = 0;
@@ -1278,9 +1295,12 @@ function pintarHoja() {
   const a = document.activeElement, foco = a && a.id, sel = a && a.selectionStart, top = $('sheet').scrollTop;
   $('sheet').innerHTML = '<div class="grabzone" id="grab"><div class="grab"></div></div>' + f();
   $('sheet').scrollTop = top;
-  if (foco && $(foco) && $('sheet').contains($(foco))) { const e = $(foco); e.focus(); try { if (sel != null) e.setSelectionRange(sel, sel); } catch (x) {} }
+  if (foco && $(foco) && $('sheet').contains($(foco))) { REPINTANDO = true; const e = $(foco); e.focus(); try { if (sel != null) e.setSelectionRange(sel, sel); } catch (x) {} REPINTANDO = false; }
+  // Si estabas escribiendo la descripción, las sugerencias siguen ahí aunque la app se haya vuelto a pintar (por ejemplo al sincronizar)
+  if (foco === 'fDesc' && $('fDesc')) verSugDesc($('fDesc').value);
   activarArrastre();
 }
+let REPINTANDO = false;
 // Deslizar hacia abajo desde la parte de arriba de la hoja para cerrarla
 function activarArrastre() {
   const g = $('grab'), s = $('sheet');
@@ -1385,6 +1405,14 @@ function catsOrdenadas(tipo) {
   DATA.movs.forEach(m => { if (m.fecha >= desde && (m.tipo === 'Gasto' || m.tipo === 'Ingreso')) cnt[m.categoria] = (cnt[m.categoria] || 0) + 1; });
   return cats.map((c, i) => ({ c, i, n: cnt[c.nombre] || 0 })).sort((a, b) => (b.n - a.n) || (a.i - b.i)).map(x => x.c);
 }
+// Chips con las descripciones que ya usaste que coinciden con lo que escribes (la lista nativa tapaba el teclado)
+function verSugDesc(v) {
+  const el = $('sugDesc'); if (!el || !FORM) return;
+  const q = sinAcentos(String(v || '').trim());
+  const lista = q ? sugerenciasDesc(FORM.tipo).filter(d => sinAcentos(d).includes(q) && sinAcentos(d) !== q).slice(0, 8) : [];
+  el.innerHTML = lista.map(d => '<button type="button" onmousedown="event.preventDefault()" onclick="usarSugDesc(\'' + jsq(d) + '\')">' + esc(d) + '</button>').join('');
+}
+function usarSugDesc(d) { const i = $('fDesc'); if (i) i.value = d; FORM.desc = d; alEscribirDesc(d); verSugDesc(''); }
 function sugerenciasDesc(tipo) {
   const vistos = new Set(), out = [];
   DATA.movs.slice().sort(ordenMov).forEach(m => { const d = (m.desc || '').trim(); if (d && m.tipo === tipo && !vistos.has(d.toLowerCase())) { vistos.add(d.toLowerCase()); out.push(d); } });
@@ -1484,8 +1512,8 @@ function hojaMov() {
     if (t === 'Gasto' && !ed && !(FORM.msi && c && c.tipo === 'Crédito')) h += htmlDividir(monto);
   }
   const ph = { Gasto: 'Ej. Oxxo, gasolina Pemex', Ingreso: 'Ej. Quincena', Traspaso: 'Ej. Pago tarjeta', Reembolso: 'Ej. Aaron me pagó la pizza', Ajuste: '', 'Presté': 'Ej. Para la renta', 'Me pagaron': 'Ej. Abono', 'Me prestaron': '', 'Le pagué': '' }[t] || '';
-  h += '<div class="fl"><label for="fDesc">Descripción</label></div><input id="fDesc" class="inp" maxlength="200" list="dlDesc" autocomplete="off" placeholder="' + ph + '" value="' + esc(FORM.desc) + '" oninput="if(FORM){FORM.desc=this.value}" onchange="alEscribirDesc(this.value)">' +
-    '<datalist id="dlDesc">' + sugerenciasDesc(t).map(d => '<option value="' + esc(d) + '">').join('') + '</datalist>';
+  h += '<div class="fl"><label for="fDesc">Descripción</label></div><input id="fDesc" class="inp" maxlength="200" autocomplete="off" placeholder="' + ph + '" value="' + esc(FORM.desc) + '" oninput="if(FORM){FORM.desc=this.value;verSugDesc(this.value)}" onfocus="if(!REPINTANDO){const e=this;setTimeout(()=>e.scrollIntoView({block:\'center\'}),350)}" onchange="alEscribirDesc(this.value)">' +
+    '<div id="sugDesc" class="sug" role="group" aria-label="Descripciones que ya usaste"></div>';
   const ayer = sumarDias(hoy(), -1);
   h += '<div class="fl">Fecha</div><div class="datewrap pick" role="group" aria-label="Fecha">' +
     '<button class="' + (FORM.fecha === hoy() ? 'on' : '') + '" aria-pressed="' + (FORM.fecha === hoy()) + '" onclick="setForm(\'fecha\',hoy())">Hoy</button>' +
@@ -2187,4 +2215,6 @@ function hojaPlan() {
 }
 function guardarAbono() { const v = parseMonto($('fAbono').value); if (v <= 0) return toast('Escribe cuánto puedes abonar'); encolar('guardarConfig', ['Abono mensual a deudas', v]); cerrarHoja(); toast('Abono mensual guardado'); }
 
-arrancar();
+// Arranca cuando ya cargaron todos los archivos (extras.js y rapido.js van después de este): si Inicio se pinta antes,
+// le faltan funciones y la pantalla se queda en negro
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrancar); else arrancar();
