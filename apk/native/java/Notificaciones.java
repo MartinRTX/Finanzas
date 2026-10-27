@@ -106,9 +106,9 @@ final class Notificaciones {
             .setSmallIcon(R.drawable.ic_notif).setColor(VERDE)
             .setContentTitle(titulo).setContentText(texto)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(texto + "\nRegistrar lo guarda con la categoría que la app adivine; Editar abre la app."))
-            .setAutoCancel(true).setContentIntent(abrir(c, "detectado", n * 4))
+            .setAutoCancel(true).setContentIntent(abrir(c, "detectado:" + id, n * 4))
             .addAction(new NotificationCompat.Action(R.drawable.ic_notif, "Registrar", accion(c, AccionesReceiver.CONFIRMAR, id, n * 4 + 1, false)))
-            .addAction(new NotificationCompat.Action(R.drawable.ic_notif, "Editar", abrir(c, "detectado", n * 4 + 2)))
+            .addAction(new NotificationCompat.Action(R.drawable.ic_notif, "Editar", abrir(c, "detectado:" + id, n * 4 + 2)))
             .addAction(new NotificationCompat.Action(R.drawable.ic_notif, "No es gasto", accion(c, AccionesReceiver.DESCARTAR, id, n * 4 + 3, false)));
         publicar(c, n, b);
     }

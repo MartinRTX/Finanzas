@@ -80,8 +80,9 @@
   .iconbtn { width: 44px; height: 44px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--ink); display: grid; place-items: center; flex: none; }
   .iconbtn svg { width: 21px; height: 21px; }
   .wrap { max-width: 520px; margin: 0 auto; padding: 2px 16px calc(var(--nav-h) + 52px + var(--sab)); }
-  #view > * { animation: sube .28s cubic-bezier(.2, .8, .2, 1) both; }
-  @keyframes sube { from { opacity: 0; transform: translateY(6px); } }
+  /* Solo se mueve un poco al cambiar de pestaña; nunca parte de invisible (en Android la animación se puede quedar congelada al abrir la app) */
+  #view.anima > * { animation: sube .22s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes sube { from { transform: translateY(6px); } }
 
   /* Héroe del inicio: tarjeta con degradado */
   .hero { position: relative; overflow: hidden; margin: 6px 0 14px; padding: 16px 18px 16px; border-radius: 26px; background: var(--hero); color: #fff; box-shadow: 0 16px 36px var(--glow); isolation: isolate; }
@@ -307,7 +308,7 @@
            display: flex; gap: 16px; align-items: center; min-height: 48px; box-shadow: 0 10px 26px rgba(0, 0, 0, .25); }
   .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
   .toast button { background: none; border: 0; color: var(--pri-2); font-weight: 800; padding: 10px 0; min-height: 44px; }
-  @media (prefers-reduced-motion: reduce) { .sheet, .scrim, .toast, .switch .knob, .switch .knob::after, .meter > div { transition: none; } #view > * { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .sheet, .scrim, .toast, .switch .knob, .switch .knob::after, .meter > div { transition: none; } #view.anima > * { animation: none; } }
 
   /* Inicio, análisis y guía */
   .seg.mini { display: inline-grid; width: auto; padding: 3px; margin: 0 0 12px; border-radius: 13px; }
@@ -436,6 +437,10 @@
   .chip.mini { padding: 6px 10px; min-height: 34px; font-size: 12.5px; }
   .det-acc { display: flex; gap: 8px; padding: 0 14px 12px 66px; }
   .det-acc .btn { flex: 1; }
+  .sug { display: flex; gap: 6px; overflow-x: auto; margin: 6px -16px 0; padding: 0 16px 2px; scrollbar-width: none; }
+  .sug::-webkit-scrollbar { display: none; }
+  .sug:empty { display: none; }
+  .sug button { flex: none; border: 1px solid var(--line); background: var(--card2); border-radius: 99px; padding: 8px 12px; min-height: 40px; font-size: 14px; font-weight: 600; max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* v7: registrar en una línea, favoritos y dictado */
   .rapido-bar { display: flex; gap: 8px; align-items: center; margin: 0 0 6px; }
   .rapido-bar .inp { flex: 1; min-width: 0; border-radius: 16px; min-height: 50px; font-size: 16px; box-shadow: var(--shadow); }

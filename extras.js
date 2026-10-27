@@ -614,11 +614,18 @@ async function revisarNativo() {
   if (!NATIVO || !DATA) return;
   const a = await nativo('Finanzas', 'accionPendiente');
   const ac = a && a.accion;
+  // "Editar" en la notificación de una compra: primero se traen las compras detectadas y luego se abre esa en el formulario
+  if (ac && /^detectado/.test(ac)) {
+    await revisarLector();
+    const id = ac.split(':').slice(1).join(':'), d = LS.get('fin_detectados', []).find(x => x.id === id);
+    if (d) registrarDetectado(id); else if (TAB !== 'Inicio') irA('Inicio');
+    if (!revisarNativo.listo) { revisarNativo.listo = true; aplicarNotifNativas(); }
+    return revisarRapidos();
+  }
   if (ac === 'gasto') abrirRegistro({});
   else if (ac === 'ticket') abrirHojaTicket();
   else if (ac === 'dictar') { if (TAB !== 'Inicio') irA('Inicio'); dictar('barra'); }
   else if (ac && /^plantilla:\d+$/.test(ac)) { const f = favoritos()[+ac.split(':')[1]]; if (f) abrirRegistro({ tipo: 'Gasto', desc: f.desc, categoria: f.cat, cuenta: f.cuenta, monto: f.monto || '' }); }
-  else if (ac === 'detectado' && TAB !== 'Inicio') irA('Inicio');
   if (!revisarNativo.listo) { revisarNativo.listo = true; aplicarNotifNativas(); }
   await revisarLector();
   await revisarRapidos();
