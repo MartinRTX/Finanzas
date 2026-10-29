@@ -24,24 +24,24 @@ function alternarFuncion(k) {
 }
 function htmlFunciones() {
   return '<div class="fl">Funciones</div><p class="hint" style="margin-top:-2px">Apaga lo que no uses y desaparece de la app.</p>' + FUNCIONES.map(([k, ic, t, d, apk]) =>
-    '<button class="switch" role="switch" aria-checked="' + fx(k) + '" onclick="alternarFuncion(\'' + k + '\')"><span><b>' + ic + ' ' + t + '</b><br><span class="muted">' + d +
+    '<button class="switch" role="switch" aria-checked="' + fx(k) + '" ' + al('click', 'alternarFuncion', k) + '><span><b>' + ic + ' ' + t + '</b><br><span class="muted">' + d +
     (apk && !NATIVO ? ' Solo en la app de Android.' : '') + '</span></span><span class="knob" aria-hidden="true"></span></button>').join('') +
     (NATIVO && fx('widget') ? '<div class="card flat" style="margin-top:10px"><div class="t1">🧩 Agregar los widgets</div><div class="muted" style="margin:4px 0 8px">Mantén presionada tu pantalla de inicio → Widgets → Finanzas. Hay dos: <b>Finanzas</b> (lo que te queda, con + y Ticket) y <b>Finanzas: atajos</b> (tus gastos frecuentes: un toque y quedan anotados, sin abrir la app).</div>' +
-      '<button class="switch" role="switch" aria-checked="' + LS.get('fin_widget_discreto', false) + '" onclick="LS.set(\'fin_widget_discreto\',!LS.get(\'fin_widget_discreto\',false));enviarWidget();pintarHoja()" style="margin-top:0"><span><b>Ocultar montos en el widget</b><br><span class="muted">Para que nadie vea tus números en tu pantalla.</span></span><span class="knob" aria-hidden="true"></span></button></div>' : '') +
+      '<button class="switch" role="switch" aria-checked="' + LS.get('fin_widget_discreto', false) + '" ' + al('click', 'alternarWidgetDiscreto') + ' style="margin-top:0"><span><b>Ocultar montos en el widget</b><br><span class="muted">Para que nadie vea tus números en tu pantalla.</span></span><span class="knob" aria-hidden="true"></span></button></div>' : '') +
     (NATIVO && fx('lector') ? '<div class="card flat" style="margin-top:10px" id="lectorEstado"><div class="t1">🔔 Permiso para leer notificaciones</div><div class="muted" style="margin:4px 0 8px">' +
       (LECTOR_ACTIVO ? '✓ Activo. Solo lee notificaciones de tus bancos; nada sale de tu celular.' : 'Android pide que lo actives a mano: Acceso a notificaciones → Finanzas → Permitir.') + '</div>' +
-      (LECTOR_ACTIVO ? '' : '<button class="btn sm" onclick="nativo(\'Finanzas\',\'abrirPermisoLector\')">Dar permiso</button>') + '</div>' : '');
+      (LECTOR_ACTIVO ? '' : '<button class="btn sm" ' + al('click', 'nativo', 'Finanzas', 'abrirPermisoLector') + '>Dar permiso</button>') + '</div>' : '');
 }
 
 /* ===================== Acciones rápidas de Inicio ===================== */
 function accionesRapidas() {
   const a = [];
-  if (fx('ticket')) a.push(['📷', 'Ticket', 'abrirHojaTicket()']);
-  if (fx('alcanza')) a.push(['🤔', '¿Me alcanza?', 'abrirAlcanza()']);
-  if (fx('importar')) a.push(['📄', 'Importar', 'abrirImportar()']);
-  if (fx('resumen')) a.push(['🗓️', 'Resumen', 'SUB_ANALISIS=\'Resumen\';irA(\'Análisis\')']);
-  if (fx('patrimonio')) a.push(['📈', 'Patrimonio', 'SUB_ANALISIS=\'Patrimonio\';irA(\'Análisis\')']);
-  return a.length ? '<div class="rapidas" role="group" aria-label="Acciones rápidas">' + a.map(x => '<button onclick="' + x[2] + '"><span aria-hidden="true">' + x[0] + '</span>' + x[1] + '</button>').join('') + '</div>' : '';
+  if (fx('ticket')) a.push(['📷', 'Ticket', al('click', 'abrirHojaTicket')]);
+  if (fx('alcanza')) a.push(['🤔', '¿Me alcanza?', al('click', 'abrirAlcanza')]);
+  if (fx('importar')) a.push(['📄', 'Importar', al('click', 'abrirImportar')]);
+  if (fx('resumen')) a.push(['🗓️', 'Resumen', al('click', 'irAnalisis', 'Resumen')]);
+  if (fx('patrimonio')) a.push(['📈', 'Patrimonio', al('click', 'irAnalisis', 'Patrimonio')]);
+  return a.length ? '<div class="rapidas" role="group" aria-label="Acciones rápidas">' + a.map(x => '<button ' + x[2] + '><span aria-hidden="true">' + x[0] + '</span>' + x[1] + '</button>').join('') + '</div>' : '';
 }
 
 /* ===================== Reglas para adivinar la categoría ===================== */
@@ -106,10 +106,10 @@ function hojaTicket() {
   else {
     if (FORM.err) h += '<div class="note red" role="alert">' + esc(FORM.err) + '</div>';
     h += '<p class="hint" style="margin-top:0">Ponlo sobre una superficie lisa, con buena luz y que se vea el TOTAL. Después revisas lo que leí antes de guardar.</p>' +
-      '<div class="actgrid" style="grid-template-columns:1fr 1fr"><button class="btn" onclick="elegirTicket(true)">📷 Tomar foto</button><button class="btn ghost" onclick="elegirTicket(false)">🖼️ De la galería</button></div>' +
-      (FORM.err ? '<button class="btn ghost block" style="margin-top:8px" onclick="FORM=null;abrirRegistro({tipo:\'Gasto\'})">Capturar a mano</button>' : '');
+      '<div class="actgrid" style="grid-template-columns:1fr 1fr"><button class="btn" ' + al('click', 'elegirTicket', true) + '>📷 Tomar foto</button><button class="btn ghost" ' + al('click', 'elegirTicket', false) + '>🖼️ De la galería</button></div>' +
+      (FORM.err ? '<button class="btn ghost block" style="margin-top:8px" ' + al('click', 'capturarAMano') + '>Capturar a mano</button>' : '');
   }
-  return h + '<div class="actbar"><button class="btn ghost" onclick="cerrarHoja()">Cerrar</button></div>';
+  return h + '<div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
 }
 function elegirTicket(camara) {
   const i = document.createElement('input');
@@ -191,16 +191,16 @@ function hojaImportar() {
   if (F.paso === 'leyendo') return h + '<div class="center" style="min-height:160px"><div><div class="spin" aria-hidden="true"></div><p class="muted">Leyendo ' + esc(F.archivo || 'tu estado de cuenta') + '…</p></div></div>';
   if (F.paso === 'revisar') return h + htmlRevisarImport();
   h += '<p class="hint" style="margin-top:0">Agrega lo que te faltó registrar. Primero revisas todo; lo que ya tienes registrado sale desmarcado.</p>';
-  h += '<div class="fl">¿De qué cuenta es?</div><div class="pick" role="group" aria-label="Cuenta">' + activas().map(c => '<button class="' + (F.cuenta === c.nombre ? 'on' : '') + '" aria-pressed="' + (F.cuenta === c.nombre) + '" onclick="setForm(\'cuenta\',\'' + jsq(c.nombre) + '\')">' + esc(c.nombre) + '</button>').join('') + '</div>';
+  h += '<div class="fl">¿De qué cuenta es?</div><div class="pick" role="group" aria-label="Cuenta">' + activas().map(c => '<button class="' + (F.cuenta === c.nombre ? 'on' : '') + '" aria-pressed="' + (F.cuenta === c.nombre) + '" ' + al('click', 'setForm', 'cuenta', c.nombre) + '>' + esc(c.nombre) + '</button>').join('') + '</div>';
   if (F.err) h += '<div class="note red" style="margin-top:12px" role="alert">' + esc(F.err) + '</div>';
-  if (F.pedirPass) h += '<div class="fl"><label for="fPass">Contraseña del PDF</label></div><input id="fPass" class="inp" type="password" autocomplete="off" value="' + esc(F.pass) + '" oninput="if(FORM){FORM.pass=this.value}"><button class="btn block" style="margin-top:8px" onclick="leerArchivoImport(FORM._file)">Abrir</button>';
-  h += '<div class="actgrid" style="grid-template-columns:1fr 1fr;margin-top:14px"><button class="btn" onclick="elegirArchivoImport()">📄 Elegir PDF o CSV</button><button class="btn ghost" onclick="FORM.pegar=!FORM.pegar;pintarHoja()">📋 Pegar texto</button></div>';
-  if (F.pegar) h += '<textarea id="fPegar" class="inp area" rows="7" placeholder="Copia los movimientos del PDF o de la página del banco y pégalos aquí" oninput="if(FORM){FORM.texto=this.value}">' + esc(F.texto) + '</textarea><button class="btn block" style="margin-top:8px" onclick="procesarTextoImport(FORM.texto.split(/\\n/), \'texto pegado\')">Leer movimientos</button>';
+  if (F.pedirPass) h += '<div class="fl"><label for="fPass">Contraseña del PDF</label></div><input id="fPass" class="inp" type="password" autocomplete="off" value="' + esc(F.pass) + '" ' + al('input', 'campoForm', 'pass') + '><button class="btn block" style="margin-top:8px" ' + al('click', 'releerArchivoImport') + '>Abrir</button>';
+  h += '<div class="actgrid" style="grid-template-columns:1fr 1fr;margin-top:14px"><button class="btn" ' + al('click', 'elegirArchivoImport') + '>📄 Elegir PDF o CSV</button><button class="btn ghost" ' + al('click', 'alternarPegar') + '>📋 Pegar texto</button></div>';
+  if (F.pegar) h += '<textarea id="fPegar" class="inp area" rows="7" placeholder="Copia los movimientos del PDF o de la página del banco y pégalos aquí" ' + al('input', 'campoForm', 'texto') + '>' + esc(F.texto) + '</textarea><button class="btn block" style="margin-top:8px" ' + al('click', 'procesarPegado') + '>Leer movimientos</button>';
   h += '<details class="arch"><summary>¿Dónde lo descargo?</summary><ul class="ideas">' +
     '<li><b>BBVA:</b> en la app o en bbva.mx → tu tarjeta → Estados de cuenta → descargar PDF. También sirve "Movimientos" → exportar.</li>' +
     '<li><b>Revolut:</b> en la app → tu cuenta → ⋯ → Estado de cuenta → Excel/CSV (mejor que PDF) → elige el periodo.</li>' +
     '<li><b>Otro banco:</b> cualquier PDF o CSV con fecha, descripción y monto por renglón. Si no lee bien, copia y pega el texto.</li></ul></details>';
-  return h + '<div class="actbar"><button class="btn ghost" onclick="cerrarHoja()">Cerrar</button></div>';
+  return h + '<div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
 }
 function elegirArchivoImport() {
   const i = document.createElement('input');
@@ -327,20 +327,20 @@ function htmlRevisarImport() {
   const tipos = ['Gasto', 'Ingreso', 'Reembolso', 'Pago', 'Omitir'];
   let h = '<div class="card flat"><div class="t1">' + F.filas.length + ' movimientos en ' + esc(F.archivo) + '</div><div class="muted">' + esc(F.cuenta) + ' · ' +
     F.filas.filter(f => !f.si).length + ' desmarcados (ya registrados, antes de tu saldo inicial u omitidos). Seleccionados: ' + sel.length + ' · salen ' + money(sale, true) + ' · entran ' + money(entra, true) + '.</div>' +
-    '<div class="actions"><button class="btn sm ghost" onclick="FORM.filas.forEach(f=>f.si=true);pintarHoja()">Marcar todos</button><button class="btn sm ghost" onclick="FORM.filas.forEach(f=>f.si=false);pintarHoja()">Ninguno</button><button class="btn sm ghost" onclick="FORM.paso=\'elegir\';pintarHoja()">Otro archivo</button></div></div>';
+    '<div class="actions"><button class="btn sm ghost" ' + al('click', 'marcarFilas', true) + '>Marcar todos</button><button class="btn sm ghost" ' + al('click', 'marcarFilas', false) + '>Ninguno</button><button class="btn sm ghost" ' + al('click', 'otroArchivoImport') + '>Otro archivo</button></div></div>';
   h += F.filas.map((f, k) => {
     const cats = f.tipo === 'Ingreso' ? catsIngreso() : catsGasto();
-    return '<div class="imp' + (f.si ? '' : ' off') + '"><label class="imp-chk"><input type="checkbox" ' + (f.si ? 'checked' : '') + ' onchange="FORM.filas[' + k + '].si=this.checked;pintarHoja()" aria-label="Importar"></label><div class="imp-c">' +
-      '<div class="imp-r"><input type="date" value="' + f.fecha + '" max="' + hoy() + '" onchange="FORM.filas[' + k + '].fecha=this.value" aria-label="Fecha">' +
-      '<input class="imp-m num" inputmode="decimal" value="' + f.monto + '" onchange="FORM.filas[' + k + '].monto=parseMonto(this.value);pintarHoja()" aria-label="Monto"></div>' +
-      '<input class="imp-d" value="' + esc(f.desc) + '" maxlength="80" oninput="FORM.filas[' + k + '].desc=this.value" aria-label="Descripción">' +
-      '<div class="imp-r"><select onchange="FORM.filas[' + k + '].tipo=this.value;FORM.filas[' + k + '].categoria=this.value===\'Ingreso\'?adivinarCategoria(FORM.filas[' + k + '].desc,\'Ingreso\'):adivinarCategoria(FORM.filas[' + k + '].desc,\'Gasto\');pintarHoja()" aria-label="Tipo">' +
+    return '<div class="imp' + (f.si ? '' : ' off') + '"><label class="imp-chk"><input type="checkbox" ' + (f.si ? 'checked' : '') + ' ' + al('change', 'filaSi', k) + ' aria-label="Importar"></label><div class="imp-c">' +
+      '<div class="imp-r"><input type="date" value="' + f.fecha + '" max="' + hoy() + '" ' + al('change', 'campoFila', k, 'fecha') + ' aria-label="Fecha">' +
+      '<input class="imp-m num" inputmode="decimal" value="' + f.monto + '" ' + al('change', 'filaMonto', k) + ' aria-label="Monto"></div>' +
+      '<input class="imp-d" value="' + esc(f.desc) + '" maxlength="80" ' + al('input', 'campoFila', k, 'desc') + ' aria-label="Descripción">' +
+      '<div class="imp-r"><select ' + al('change', 'filaTipo', k) + ' aria-label="Tipo">' +
       tipos.map(t => '<option' + (t === f.tipo ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
-      (f.tipo === 'Gasto' || f.tipo === 'Ingreso' || f.tipo === 'Reembolso' ? '<select onchange="FORM.filas[' + k + '].categoria=this.value" aria-label="Categoría">' + cats.map(c => '<option' + (c.nombre === f.categoria ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('') + '</select>' :
-        f.tipo === 'Pago' ? '<select onchange="FORM.filas[' + k + '].origen=this.value" aria-label="Pagado desde">' + activas().filter(c => !esDeuda(c)).map(c => '<option' + (c.nombre === f.origen ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('') + '</select>' : '') + '</div>' +
+      (f.tipo === 'Gasto' || f.tipo === 'Ingreso' || f.tipo === 'Reembolso' ? '<select ' + al('change', 'campoFila', k, 'categoria') + ' aria-label="Categoría">' + cats.map(c => '<option' + (c.nombre === f.categoria ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('') + '</select>' :
+        f.tipo === 'Pago' ? '<select ' + al('change', 'campoFila', k, 'origen') + ' aria-label="Pagado desde">' + activas().filter(c => !esDeuda(c)).map(c => '<option' + (c.nombre === f.origen ? ' selected' : '') + '>' + esc(c.nombre) + '</option>').join('') + '</select>' : '') + '</div>' +
       (f.nota ? '<div class="muted imp-n">' + esc(f.nota) + '</div>' : '') + '</div></div>';
   }).join('');
-  return h + '<div class="actbar"><button class="btn ghost" onclick="cerrarHoja()">Cerrar</button><button class="btn" ' + (sel.length ? '' : 'disabled') + ' onclick="confirmarImport()">Agregar ' + sel.length + '</button></div>';
+  return h + '<div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button><button class="btn" ' + (sel.length ? '' : 'disabled') + ' ' + al('click', 'confirmarImport') + '>Agregar ' + sel.length + '</button></div>';
 }
 function confirmarImport() {
   const F = FORM, c = DATA.cuentas.find(x => x.nombre === F.cuenta);
@@ -413,7 +413,7 @@ function graficaLineas(fechas, series) {
   const marcas = fechas.length <= 3 ? fechas.map((_, i) => i) : [0, Math.floor((fechas.length - 1) / 2), fechas.length - 1];
   marcas.forEach(i => { s += '<text class="lb" x="' + x(i) + '" y="' + (H - 6) + '"' + (i === 0 ? ' style="text-anchor:start"' : i === fechas.length - 1 ? ' style="text-anchor:end"' : '') + '>' + fechaCorta(fechas[i]) + '</text>'; });
   const paso = (W - pl - pr) / Math.max(1, fechas.length - 1);
-  fechas.forEach((f, i) => { s += '<rect class="hit" x="' + (x(i) - paso / 2) + '" y="0" width="' + paso + '" height="' + H + '" tabindex="0" role="button" aria-label="' + fechaCorta(f) + '" onclick="detallePat(' + i + ')" onkeydown="if(event.key===\'Enter\')detallePat(' + i + ')"/>'; });
+  fechas.forEach((f, i) => { s += '<rect class="hit" x="' + (x(i) - paso / 2) + '" y="0" width="' + paso + '" height="' + H + '" tabindex="0" role="button" aria-label="' + fechaCorta(f) + '" ' + al('click', 'detallePat', i) + ' ' + al('keydown', 'enterToca') + '/>'; });
   return s + '</svg>';
 }
 function detallePat(i) {
@@ -440,8 +440,8 @@ function vistaResumen() {
   const act = hoy().slice(0, 7);
   if (!MES_RES) MES_RES = mesSig(act, -1);
   const R = resumenDe(MES_RES), x = R.x, nom = MESES[+MES_RES.slice(5, 7) - 1], dif = R.p && R.p.gasto > 0 ? Math.round((x.gasto - R.p.gasto) / R.p.gasto * 100) : null;
-  let h = '<div class="monthbar"><button class="arrow" aria-label="Mes anterior" onclick="MES_RES=mesSig(MES_RES,-1);pintar()">' + ARROW_L + '</button><span class="nm" aria-live="polite">' + nombreMes(MES_RES) + '</span>' +
-    '<button class="arrow" aria-label="Mes siguiente" ' + (MES_RES >= act ? 'disabled' : '') + ' onclick="MES_RES=mesSig(MES_RES,1);pintar()">' + ARROW_R + '</button></div>';
+  let h = '<div class="monthbar"><button class="arrow" aria-label="Mes anterior" ' + al('click', 'moverMesRes', -1) + '>' + ARROW_L + '</button><span class="nm" aria-live="polite">' + nombreMes(MES_RES) + '</span>' +
+    '<button class="arrow" aria-label="Mes siguiente" ' + (MES_RES >= act ? 'disabled' : '') + ' ' + al('click', 'moverMesRes', 1) + '>' + ARROW_R + '</button></div>';
   if (!x.gasto && !x.ingreso) return h + '<div class="list"><div class="empty">Sin registros en ' + nombreMes(MES_RES) + '.</div></div>';
   h += '<section class="hero" style="margin-top:0"><div class="lbl">' + (MES_RES === act ? 'Llevas gastado en ' + nom : 'En ' + nom + ' gastaste') + '</div><div class="big num">' + money(x.gasto, true) + '</div>' +
     '<div class="of">' + (R.pres ? 'de ' + money(R.pres, true) + ' de presupuesto' : '') + (dif !== null ? (R.pres ? ' · ' : '') + (dif > 0 ? '▲ ' + dif + '% más' : dif < 0 ? '▼ ' + Math.abs(dif) + '% menos' : 'igual') + ' que ' + MESES[+R.prevK.slice(5, 7) - 1] : '') + '</div>' +
@@ -452,7 +452,7 @@ function vistaResumen() {
     (R.deuda !== null ? '<div class="stat"><div class="muted">Tu deuda</div><div class="amt sm num ' + (R.deuda <= 0 ? 'green' : 'red') + '">' + (R.deuda <= 0 ? '▼ ' : '▲ ') + money(Math.abs(R.deuda), true) + '</div><div class="sub">' + (R.deuda <= 0 ? 'bajó' : 'subió') + ' en el mes</div></div>' : '') +
     '<div class="stat"><div class="muted">Días registrados</div><div class="amt sm num">' + R.dias + '</div><div class="sub">de ' + (MES_RES === act ? +hoy().slice(8, 10) : diasDelMes(MES_RES)) + '</div></div></div>';
   if (R.cats.length) h += '<div class="card"><div class="t1">En qué se fue</div>' + R.cats.slice(0, 5).map(c => '<div class="qrow"><span>' + emo(ICONO[c]) + esc(c) + ' <span class="muted">' + Math.round(x.cat[c] / x.gasto * 100) + '%</span></span><b class="num">' + money(x.cat[c], true) + '</b></div>').join('') +
-    '<button class="btn sm ghost" style="margin-top:8px" onclick="SUB_ANALISIS=\'Categorías\';MES_CAT=\'' + MES_RES + '\';pintar()">Ver todas las categorías</button></div>';
+    '<button class="btn sm ghost" style="margin-top:8px" ' + al('click', 'verCategoriasDe', MES_RES) + '>Ver todas las categorías</button></div>';
   const lo = [];
   if (R.mejor) lo.push('👍 Gastaste <b>' + money(-R.mejor.d, true) + ' menos</b> en ' + esc(R.mejor.c) + ' que en ' + MESES[+R.prevK.slice(5, 7) - 1] + '.');
   if (R.peor) lo.push('👀 <b>' + esc(R.peor.c) + '</b> subió ' + money(R.peor.d, true) + '.');
@@ -466,8 +466,8 @@ function vistaResumen() {
   h += '<div class="fl">Resumen por correo</div>';
   if (DEMO) h += '<div class="card flat muted">En modo ejemplo no se mandan correos.</div>';
   else if (ver < 5) h += '<div class="note">Para recibirlo por correo actualiza el código de Apps Script a la v5.</div>';
-  else h += '<button class="switch" role="switch" aria-checked="' + !!BASE.resumenActivo + '" onclick="alternarResumenCorreo()"><span><b>Mandármelo el día 1 de cada mes</b><br><span class="muted">A ' + esc(BASE.correo || 'tu correo de Google') + ', con tus números, categorías, gastos grandes y metas.</span></span><span class="knob" aria-hidden="true"></span></button>' +
-    '<button class="btn ghost block" style="margin-top:8px" onclick="mandarResumen(\'' + MES_RES + '\')">✉️ Mandar el de ' + nom + ' ahora</button>';
+  else h += '<button class="switch" role="switch" aria-checked="' + !!BASE.resumenActivo + '" ' + al('click', 'alternarResumenCorreo') + '><span><b>Mandármelo el día 1 de cada mes</b><br><span class="muted">A ' + esc(BASE.correo || 'tu correo de Google') + ', con tus números, categorías, gastos grandes y metas.</span></span><span class="knob" aria-hidden="true"></span></button>' +
+    '<button class="btn ghost block" style="margin-top:8px" ' + al('click', 'mandarResumen', MES_RES) + '>✉️ Mandar el de ' + nom + ' ahora</button>';
   return h;
 }
 async function alternarResumenCorreo() {
@@ -485,7 +485,7 @@ function tarjetaResumenListo() {
   if (!fx('resumen') || +hoy().slice(8, 10) > 5) return '';
   const mk = mesSig(hoy().slice(0, 7), -1), R = resumenDe(mk);
   if (!R.x.gasto) return '';
-  return '<button class="card row between" onclick="MES_RES=\'' + mk + '\';SUB_ANALISIS=\'Resumen\';irA(\'Análisis\')"><span><span class="t1">🗓️ Tu resumen de ' + MESES[+mk.slice(5, 7) - 1] + ' está listo</span><br><span class="muted">Gastaste ' + money(R.x.gasto, true) +
+  return '<button class="card row between" ' + al('click', 'verResumenDe', mk) + '><span><span class="t1">🗓️ Tu resumen de ' + MESES[+mk.slice(5, 7) - 1] + ' está listo</span><br><span class="muted">Gastaste ' + money(R.x.gasto, true) +
     (R.ahorro >= 0 ? ' y ahorraste ' + money(R.ahorro, true) : ' y gastaste ' + money(-R.ahorro, true) + ' más de lo que entró') + '.</span></span><span class="chev" aria-hidden="true">›</span></button>';
 }
 
@@ -495,39 +495,39 @@ function eventosProximos(dias) {
   const add = (fecha, ic, t, monto, cls, accion) => { if (fecha && fecha >= hoy() && fecha <= lim) ev.push({ fecha, ic, t, monto, cls, accion }); };
   activas().filter(esDeuda).forEach(c => {
     const ps = c.tipo === 'Crédito' ? pagoSinIntereses(c) : null;
-    if (ps && ps.falta > 0.5) add(ps.limite, '💳', c.nombre + ': fecha límite' + (c.domiciliado ? ' (domiciliado)' : ''), ps.falta, 'out', 'pagarEstado(\'' + jsq(c.nombre) + '\')');
-    else if (!ps && c.diaPago && saldo(c) < -0.5 && c.tipo === 'Crédito') add(proximaFecha(c.diaPago), '💳', c.nombre + ': fecha límite', null, 'out', 'abrirDetalle(\'' + jsq(c.nombre) + '\')');
+    if (ps && ps.falta > 0.5) add(ps.limite, '💳', c.nombre + ': fecha límite' + (c.domiciliado ? ' (domiciliado)' : ''), ps.falta, 'out', al('click', 'pagarEstado', c.nombre));
+    else if (!ps && c.diaPago && saldo(c) < -0.5 && c.tipo === 'Crédito') add(proximaFecha(c.diaPago), '💳', c.nombre + ': fecha límite', null, 'out', al('click', 'abrirDetalle', c.nombre));
     const ci = c.tipo === 'Crédito' ? cicloTarjeta(c, hoy()) : null;
-    if (ci) add(ci.corte, '✂️', 'Corta ' + c.nombre, null, 'tr', 'abrirDetalle(\'' + jsq(c.nombre) + '\')');
+    if (ci) add(ci.corte, '✂️', 'Corta ' + c.nombre, null, 'tr', al('click', 'abrirDetalle', c.nombre));
   });
   const usados = new Set(DATA.movs.filter(m => m.fijo && m.fecha.slice(0, 7) === mk).map(m => m.fijo));
   DATA.fijos.filter(f => fijoVigente(f) && f.dia).forEach(f => {
     for (let k = 0; k < 2; k++) {
       const mes = mesSig(mk, k), fecha = conDia(mes, f.dia);
       if (k === 0 && usados.has(f.id)) continue;
-      add(fecha, f.tipo === 'Ingreso' ? '💰' : f.tipo === 'Traspaso' ? '🏦' : emo(ICONO[f.categoria]).replace(/<[^>]+>/g, '').trim() || '📌', f.nombre, f.monto, f.tipo === 'Ingreso' ? 'in' : 'out', 'usarFijo(\'' + jsq(f.id) + '\')');
+      add(fecha, f.tipo === 'Ingreso' ? '💰' : f.tipo === 'Traspaso' ? '🏦' : emo(ICONO[f.categoria]).replace(/<[^>]+>/g, '').trim() || '📌', f.nombre, f.monto, f.tipo === 'Ingreso' ? 'in' : 'out', al('click', 'usarFijo', f.id));
     }
   });
-  metasActivas().filter(m => m.fecha).forEach(m => add(m.fecha, m.icono || '🎯', 'Meta: ' + m.nombre, Math.max(0, m.objetivo - (m.apartado || 0)), 'tr', 'abrirMeta(\'' + jsq(m.id) + '\')'));
+  metasActivas().filter(m => m.fecha).forEach(m => add(m.fecha, m.icono || '🎯', 'Meta: ' + m.nombre, Math.max(0, m.objetivo - (m.apartado || 0)), 'tr', al('click', 'abrirMeta', m.id)));
   return ev.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
 }
 function filaEvento(e) {
   const d = difDias(hoy(), e.fecha);
-  return '<button class="mv" onclick="' + e.accion + '"><span class="ic" aria-hidden="true">' + e.ic + '</span><span class="tx"><div class="d1">' + esc(e.t) + '</div><div class="d2">' + (d === 0 ? 'Hoy' : d === 1 ? 'Mañana' : fechaLarga(e.fecha)) + '</div></span>' +
+  return '<button class="mv" ' + e.accion + '><span class="ic" aria-hidden="true">' + e.ic + '</span><span class="tx"><div class="d1">' + esc(e.t) + '</div><div class="d2">' + (d === 0 ? 'Hoy' : d === 1 ? 'Mañana' : fechaLarga(e.fecha)) + '</div></span>' +
     (e.monto ? '<span class="m num ' + (e.cls === 'in' ? 'in' : '') + '">' + (e.cls === 'in' ? '+' : '') + money(e.monto, true) + '</span>' : '') + '</button>';
 }
 function tarjetaProximos() {
   if (!fx('proximos')) return '';
   const ev = eventosProximos(10);
   if (!ev.length) return '';
-  return '<h2>Próximos pagos<button class="more" onclick="abrirProximos()">Ver 30 días</button></h2><div class="list" style="margin-bottom:12px">' + ev.slice(0, 4).map(filaEvento).join('') + '</div>';
+  return '<h2>Próximos pagos<button class="more" ' + al('click', 'abrirProximos') + '>Ver 30 días</button></h2><div class="list" style="margin-bottom:12px">' + ev.slice(0, 4).map(filaEvento).join('') + '</div>';
 }
 function abrirProximos() { FORM = { vista: 'proximos' }; abrirHoja(); pintarHoja(); enfocarTitulo(); }
 function hojaProximos() {
   const ev = eventosProximos(30), sale = ev.filter(e => e.cls === 'out' && e.monto).reduce((t, e) => t + e.monto, 0), entra = ev.filter(e => e.cls === 'in' && e.monto).reduce((t, e) => t + e.monto, 0);
   return titulo('Próximos 30 días') + '<div class="grid2" style="margin-bottom:12px"><div class="stat"><div class="muted">Por pagar</div><div class="amt sm num red">' + money(sale, true) + '</div></div><div class="stat"><div class="muted">Por recibir</div><div class="amt sm num green">' + money(entra, true) + '</div></div></div>' +
     (ev.length ? '<div class="list">' + ev.map(filaEvento).join('') + '</div>' : '<div class="list"><div class="empty">Nada en los próximos 30 días.</div></div>') +
-    '<p class="hint">Incluye fechas límite de tus tarjetas (con el pago para no generar intereses), cortes, pagos fijos con día y fechas de tus metas.</p><div class="actbar"><button class="btn ghost" onclick="cerrarHoja()">Cerrar</button></div>';
+    '<p class="hint">Incluye fechas límite de tus tarjetas (con el pago para no generar intereses), cortes, pagos fijos con día y fechas de tus metas.</p><div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
 }
 
 /* ===================== Gastos hormiga ===================== */
@@ -540,7 +540,7 @@ function tarjetaHormiga() {
   const alMes = total / dias * 30.4, grupos = {};
   chicos.forEach(m => { const k = normalizarDesc(m.desc) || m.categoria; const g = grupos[k] || (grupos[k] = { n: (m.desc || m.categoria).trim(), v: 0, c: 0, cat: m.categoria }); g.v += m.monto; g.c++; });
   const top = Object.values(grupos).sort((a, b) => b.v - a.v).slice(0, 5);
-  return '<div class="card"><div class="row between"><span class="t1">🐜 Gastos hormiga</span><span class="chips" style="padding:0">' + [100, 150, 250].map(u => '<button class="chip mini' + (u === UMBRAL_HORMIGA ? ' on' : '') + '" onclick="UMBRAL_HORMIGA=' + u + ';LS.set(\'fin_umbral_hormiga\',' + u + ');pintar()">≤' + u + '</button>').join('') + '</span></div>' +
+  return '<div class="card"><div class="row between"><span class="t1">🐜 Gastos hormiga</span><span class="chips" style="padding:0">' + [100, 150, 250].map(u => '<button class="chip mini' + (u === UMBRAL_HORMIGA ? ' on' : '') + '" ' + al('click', 'umbralHormiga', u) + '>≤' + u + '</button>').join('') + '</span></div>' +
     '<div class="muted" style="margin:4px 0 8px">Compras de ' + money(UMBRAL_HORMIGA, true) + ' o menos en los últimos 3 meses.</div>' +
     (chicos.length ? '<div class="row between"><span><span class="amt num">' + money(alMes, true) + '</span> <span class="muted">al mes</span></span><span class="muted">' + chicos.length + ' compras · al año ' + money(alMes * 12, true) + '</span></div>' +
       top.map(g => '<div class="qrow"><span>' + emo(ICONO[g.cat]) + esc(g.n) + ' <span class="muted">(' + g.c + (g.c === 1 ? ' vez' : ' veces') + ')</span></span><b class="num">' + money(g.v, true) + '</b></div>').join('') +
@@ -553,9 +553,9 @@ function abrirAlcanza() { FORM = { vista: 'alcanza', monto: '', cuenta: cuentaGa
 function hojaAlcanza() {
   const F = FORM, monto = parseMonto(F.monto), c = DATA.cuentas.find(x => x.nombre === F.cuenta);
   let h = titulo('¿Me alcanza?');
-  h += '<label class="amount"><span aria-hidden="true">$</span><input id="fAlc" inputmode="decimal" placeholder="¿Cuánto cuesta?" value="' + esc(F.monto) + '" oninput="if(FORM){FORM.monto=this.value}" onchange="pintarHoja()" onkeydown="if(event.key===\'Enter\')this.blur()" aria-label="Precio"></label>';
-  h += '<div class="fl">¿Con qué pagarías?</div><div class="pick" role="group" aria-label="Con qué">' + cuentasPara('Gasto').map(x => '<button class="' + (F.cuenta === x.nombre ? 'on' : '') + '" aria-pressed="' + (F.cuenta === x.nombre) + '" onclick="setForm(\'cuenta\',\'' + jsq(x.nombre) + '\')">' + esc(x.nombre) + '</button>').join('') + '</div>';
-  if (!(monto > 0)) return h + '<p class="hint">Escribe el precio y te digo cómo queda tu quincena, tu tarjeta y tus metas.</p><div class="actbar"><button class="btn ghost" onclick="cerrarHoja()">Cerrar</button></div>';
+  h += '<label class="amount"><span aria-hidden="true">$</span><input id="fAlc" inputmode="decimal" placeholder="¿Cuánto cuesta?" value="' + esc(F.monto) + '" ' + al('input', 'campoForm', 'monto') + ' ' + al('change', 'pintarHoja') + ' ' + al('keydown', 'enterSuelta') + ' aria-label="Precio"></label>';
+  h += '<div class="fl">¿Con qué pagarías?</div><div class="pick" role="group" aria-label="Con qué">' + cuentasPara('Gasto').map(x => '<button class="' + (F.cuenta === x.nombre ? 'on' : '') + '" aria-pressed="' + (F.cuenta === x.nombre) + '" ' + al('click', 'setForm', 'cuenta', x.nombre) + '>' + esc(x.nombre) + '</button>').join('') + '</div>';
+  if (!(monto > 0)) return h + '<p class="hint">Escribe el precio y te digo cómo queda tu quincena, tu tarjeta y tus metas.</p><div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
   const rq = rangoQuincena(hoy()), presQ = resumenMes(hoy().slice(0, 7)).presupuesto / 2, quedaQ = r2(presQ - gastoNeto(rq.desde, rq.hasta)), p = patrimonio(), libre = r2(p.disp - apartadoMetas());
   const meta = metasActivas().find(m => (m.apartado || 0) >= monto), credito = c && c.tipo === 'Crédito';
   let ver, cls;
@@ -573,7 +573,7 @@ function hojaAlcanza() {
     if (ci) { const max = cicloTarjeta(c, ci.mejor).dias; h += '<div class="finan"><span class="finan-ic" aria-hidden="true">💳</span><div>Si lo compras hoy lo pagas el <b>' + fechaCorta(ci.pago) + '</b> (' + ci.dias + ' días).' + (max - ci.dias >= 10 ? ' Si esperas al <b>' + fechaCorta(ci.mejor) + '</b>, tendrías <b>' + max + ' días</b>.' : '') + '</div></div>'; }
     h += '<div class="fl">A meses sin intereses</div><div class="card" style="padding:4px 16px">' + [3, 6, 12].map(n => '<div class="qrow"><span>' + n + ' meses</span><b class="num">' + money(monto / n, true) + ' al mes <span class="muted">(' + Math.round(monto / n / Math.max(1, presQ * 2) * 100) + '% de tu presupuesto)</span></b></div>').join('') + '</div>';
   }
-  h += '<div class="actbar"><button class="btn ghost" onclick="cerrarHoja()">Cerrar</button><button class="btn" onclick="const m=parseMonto(FORM.monto),c=FORM.cuenta;FORM=null;abrirRegistro({tipo:\'Gasto\',monto:m,cuenta:c})">Registrar compra</button></div>';
+  h += '<div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button><button class="btn" ' + al('click', 'registrarCompraAlcanza') + '>Registrar compra</button></div>';
   return h;
 }
 
@@ -658,11 +658,11 @@ function tarjetaDetectados() {
   if (!fx('lector')) return '';
   const ds = LS.get('fin_detectados', []);
   if (!ds.length) return '';
-  return '<h2>Detecté en tus notificaciones<button class="more" onclick="LS.set(\'fin_detectados\',[]);pintar()">Descartar todo</button></h2><div class="list" style="margin-bottom:12px">' + ds.slice().reverse().slice(0, 4).map(d =>
+  return '<h2>Detecté en tus notificaciones<button class="more" ' + al('click', 'descartarDetectados') + '>Descartar todo</button></h2><div class="list" style="margin-bottom:12px">' + ds.slice().reverse().slice(0, 4).map(d =>
     '<div class="mv"><span class="ic" aria-hidden="true">🔔</span><span class="tx"><div class="d1">' + esc(d.comercio || d.banco) + '</div><div class="d2">' + esc(d.banco) + ' · ' + haceCuanto(d.cuando) +
     (d.monto > 0 && yaRegistrado(d.tipo === 'Ingreso' || d.tipo === 'Reembolso' ? d.tipo : 'Gasto', d.monto, claveDia(new Date(d.cuando))) ? ' · <b>parece que ya lo registraste</b>' : '') + (d.otraMoneda ? ' · otra moneda' : '') + '</div></span>' +
     '<span class="m num' + (d.tipo === 'Gasto' ? '' : ' in') + '">' + (d.monto > 0 ? (d.tipo === 'Gasto' ? '−' : '+') + money(d.monto) : '¿?') + '</span></div>' +
-    '<div class="det-acc"><button class="btn sm" onclick="registrarDetectado(\'' + jsq(d.id) + '\')">Registrar</button><button class="btn sm ghost" onclick="descartarDetectado(\'' + jsq(d.id) + '\')">No es gasto</button></div>').join('') + '</div>' +
+    '<div class="det-acc"><button class="btn sm" ' + al('click', 'registrarDetectado', d.id) + '>Registrar</button><button class="btn sm ghost" ' + al('click', 'descartarDetectado', d.id) + '>No es gasto</button></div>').join('') + '</div>' +
     (ds.length > 4 ? '<p class="hint" style="margin-top:-6px">Y ' + (ds.length - 4) + ' más.</p>' : '');
 }
 function registrarDetectado(id) {
@@ -672,3 +672,22 @@ function registrarDetectado(id) {
 }
 function descartarDetectado(id) { LS.set('fin_detectados', LS.get('fin_detectados', []).filter(x => x.id !== id)); vibrar(8); pintar(); }
 function quitarDetectado(id) { if (id) LS.set('fin_detectados', LS.get('fin_detectados', []).filter(x => x.id !== id)); }
+
+/* ===================== Acciones de los botones de este archivo ===================== */
+function alternarWidgetDiscreto() { LS.set('fin_widget_discreto', !LS.get('fin_widget_discreto', false)); enviarWidget(); pintarHoja(); }
+function capturarAMano() { FORM = null; abrirRegistro({ tipo: 'Gasto' }); }
+function releerArchivoImport() { leerArchivoImport(FORM._file); }
+function alternarPegar() { FORM.pegar = !FORM.pegar; pintarHoja(); }
+function procesarPegado() { procesarTextoImport(FORM.texto.split(/\n/), 'texto pegado'); }
+function marcarFilas(si) { FORM.filas.forEach(f => f.si = si); pintarHoja(); }
+function otroArchivoImport() { FORM.paso = 'elegir'; pintarHoja(); }
+function campoFila(k, campo) { FORM.filas[k][campo] = this.value; }
+function filaSi(k) { FORM.filas[k].si = this.checked; pintarHoja(); }
+function filaMonto(k) { FORM.filas[k].monto = parseMonto(this.value); pintarHoja(); }
+function filaTipo(k) { const f = FORM.filas[k]; f.tipo = this.value; f.categoria = adivinarCategoria(f.desc, this.value === 'Ingreso' ? 'Ingreso' : 'Gasto'); pintarHoja(); }
+function moverMesRes(d) { MES_RES = mesSig(MES_RES, d); pintar(); }
+function verCategoriasDe(mk) { SUB_ANALISIS = 'Categorías'; MES_CAT = mk; pintar(); }
+function verResumenDe(mk) { MES_RES = mk; SUB_ANALISIS = 'Resumen'; irA('Análisis'); }
+function umbralHormiga(u) { UMBRAL_HORMIGA = u; LS.set('fin_umbral_hormiga', u); pintar(); }
+function registrarCompraAlcanza() { const m = parseMonto(FORM.monto), c = FORM.cuenta; FORM = null; abrirRegistro({ tipo: 'Gasto', monto: m, cuenta: c }); }
+function descartarDetectados() { LS.set('fin_detectados', []); pintar(); }

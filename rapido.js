@@ -169,16 +169,16 @@ let RAPIDO_TXT = '';
 function barraRapida() {
   const e = RAPIDO_TXT.trim() ? entenderLinea(RAPIDO_TXT) : null;
   return '<div class="rapido-bar"><label class="sr" for="rapido">Registrar en una línea</label>' +
-    '<input id="rapido" class="inp" placeholder="Escribe o dicta: 230 oxxo" enterkeyhint="send" autocomplete="off" value="' + esc(RAPIDO_TXT) + '" oninput="RAPIDO_TXT=this.value;previewRapido()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();enviarRapido()}">' +
-    '<button class="iconbtn" onclick="dictar(\'barra\')" aria-label="Dictar un gasto">' + ICON_MIC + '</button>' +
-    '<button class="iconbtn enviar" onclick="enviarRapido()" aria-label="Guardar">' + ICON_ENVIAR + '</button></div>' +
+    '<input id="rapido" class="inp" placeholder="Escribe o dicta: 230 oxxo" enterkeyhint="send" autocomplete="off" value="' + esc(RAPIDO_TXT) + '" ' + al('input', 'escribirRapido') + ' ' + al('keydown', 'enterRapido') + '>' +
+    '<button class="iconbtn" ' + al('click', 'dictar', 'barra') + ' aria-label="Dictar un gasto">' + ICON_MIC + '</button>' +
+    '<button class="iconbtn enviar" ' + al('click', 'enviarRapido') + ' aria-label="Guardar">' + ICON_ENVIAR + '</button></div>' +
     '<div id="rapidoPrev" class="rapido-prev" aria-live="polite">' + htmlPreview(e) + '</div>' + htmlFavoritos();
 }
 const ICON_MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
 const ICON_ENVIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 function htmlPreview(e) {
   if (!e) return '<span class="muted">Ej. "650 gasolina", "120 tacos débito ayer", "1200 amazon 6 msi", "le presté 500 a Aaron"</span>';
-  return '<button class="prev ' + (e.ok ? 'ok' : '') + '" onclick="editarRapido()">' + esc(resumenLinea(e)) + '<span class="muted"> · ' + (e.ok ? 'Enter para guardar, toca para cambiar' : 'toca para completar') + '</span></button>';
+  return '<button class="prev ' + (e.ok ? 'ok' : '') + '" ' + al('click', 'editarRapido') + '>' + esc(resumenLinea(e)) + '<span class="muted"> · ' + (e.ok ? 'Enter para guardar, toca para cambiar' : 'toca para completar') + '</span></button>';
 }
 function previewRapido() { const p = $('rapidoPrev'); if (p) p.innerHTML = htmlPreview(RAPIDO_TXT.trim() ? entenderLinea(RAPIDO_TXT) : null); }
 function editarRapido() {
@@ -216,7 +216,7 @@ const etiquetaFav = f => (emo(ICONO[f.cat]).replace(/<[^>]+>/g, '').trim() + ' '
 function htmlFavoritos() {
   const fs = favoritos();
   if (!fs.length) return '';
-  return '<div class="favs" role="group" aria-label="Tus gastos frecuentes">' + fs.map((f, i) => '<button onclick="usarFavorito(' + i + ')">' + esc(etiquetaFav(f)) + (f.monto ? '' : ' <span class="muted">…</span>') + '</button>').join('') + '</div>';
+  return '<div class="favs" role="group" aria-label="Tus gastos frecuentes">' + fs.map((f, i) => '<button ' + al('click', 'usarFavorito', i) + '>' + esc(etiquetaFav(f)) + (f.monto ? '' : ' <span class="muted">…</span>') + '</button>').join('') + '</div>';
 }
 // Con monto fijo se guarda al instante (con Deshacer); si cambia cada vez, abre el registro con todo lo demás puesto
 function usarFavorito(i, fav) {
@@ -340,10 +340,14 @@ async function alternarNotif(k) {
 }
 function htmlNotificaciones() {
   if (!NATIVO) return '';
-  const n = notifCfg(), sw = (on, fn, t, d) => '<button class="switch" role="switch" aria-checked="' + !!on + '" onclick="' + fn + '"><span><b>' + t + '</b><br><span class="muted">' + d + '</span></span><span class="knob" aria-hidden="true"></span></button>';
-  return sw(n.rapida, "alternarNotif('rapida')", '✍️ Notificación para registrar', 'Queda fija en tu barra de notificaciones: tocas Escribir, pones "230 oxxo" y listo, sin abrir la app. También trae Ticket y Dictar.') +
+  const n = notifCfg(), sw = (on, fn, t, d) => '<button class="switch" role="switch" aria-checked="' + !!on + '" ' + fn + '><span><b>' + t + '</b><br><span class="muted">' + d + '</span></span><span class="knob" aria-hidden="true"></span></button>';
+  return sw(n.rapida, al('click', 'alternarNotif', 'rapida'), '✍️ Notificación para registrar', 'Queda fija en tu barra de notificaciones: tocas Escribir, pones "230 oxxo" y listo, sin abrir la app. También trae Ticket y Dictar.') +
     '<div class="card flat" style="margin-top:10px"><div class="t1">⚡ Más formas rápidas</div><ul class="ideas" style="margin-top:4px">' +
       '<li>Mantén presionado el ícono de Finanzas: <b>Gasto</b>, <b>Dictar</b> y <b>Ticket</b>.</li>' +
       '<li>Desliza dos veces hacia abajo, toca el lápiz del panel rápido y agrega <b>Registrar gasto</b>.</li></ul></div>' +
-    (fx('lector') ? sw(n.detectados !== false, "alternarNotif('detectados')", '🔔 Preguntarme por cada compra', 'Cuando tu banco avise de una compra, te llega "¿Registrar $230 en OXXO?" con botones Registrar, Editar y No es gasto.') : '');
+    (fx('lector') ? sw(n.detectados !== false, al('click', 'alternarNotif', 'detectados'), '🔔 Preguntarme por cada compra', 'Cuando tu banco avise de una compra, te llega "¿Registrar $230 en OXXO?" con botones Registrar, Editar y No es gasto.') : '');
 }
+
+/* ===================== Acciones de la barra rápida ===================== */
+function escribirRapido() { RAPIDO_TXT = this.value; previewRapido(); }
+function enterRapido() { if (EVENTO.key === 'Enter') { EVENTO.preventDefault(); enviarRapido(); } }

@@ -31,6 +31,10 @@ y APK de Android (Capacitor) que carga esa misma página. Los datos viven en una
 ## Estructura
 
 - `index.html` (estilos y esqueleto), `app.js` (núcleo), `extras.js` (módulos v6), `rapido.js` (registro rápido v7).
+- Botones: **nunca** `onclick="…"` ni otro atributo `on*` (la CSP es `script-src 'self'` y los bloquea). Se escribe
+  `al('click', 'nombreFuncion', arg1, …)` (también `input`, `change`, `keydown`, `focus`, `mousedown`); la función debe ser
+  una `function` global, recibe los argumentos (JSON) con `this` = el elemento y `EVENTO` = el evento. `tema.js` va aparte
+  por la misma razón. La prueba "Botones" revisa que cada acción exista.
 - `sw.js`: al publicar cambios de la app, subir `VERSION` (y `VERSION_APP` en `app.js`) para que los celulares actualicen.
 - `apk/`: cascarón Capacitor; `apk/native/java` (plugin, widgets, notificaciones, lector), `apk/res` (íconos y layouts),
   `apk/native/manifest-application.xml` (lo que se inserta en el manifiesto; el bloque `<!--LECTOR-->` se quita en la variante ligera).

@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Finanzas">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://script.google.com https://script.googleusercontent.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <title>Finanzas</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon-32.png" sizes="32x32">
@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="bricolage.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/inter.woff2" as="font" type="font/woff2" crossorigin>
-<script>/* Tema elegido en Ajustes, antes de pintar para que no parpadee */ try { var t = JSON.parse(localStorage.getItem('fin_tema')); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}</script>
+<script src="tema.js"></script>
 <style>
   /* Bricolage para números y títulos; Inter (licencia en fonts/OFL.txt) para el texto. Las dos van guardadas para funcionar sin señal. */
   @font-face { font-family: "Bricolage"; src: url("bricolage.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
@@ -463,9 +463,9 @@
 </style>
 </head>
 <body>
-<header class="appbar"><div class="in"><h1 id="titulo">Finanzas</h1><button id="sync" class="sync" onclick="tocarSync()" aria-live="polite">…</button>
-  <button id="ojo" class="iconbtn" onclick="alternarDiscreto()" aria-label="Ocultar montos" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
-  <button class="iconbtn" onclick="abrirAjustes()" aria-label="Ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button></div></header>
+<header class="appbar"><div class="in"><h1 id="titulo">Finanzas</h1><button id="sync" class="sync" data-click="tocarSync" aria-live="polite">…</button>
+  <button id="ojo" class="iconbtn" data-click="alternarDiscreto" aria-label="Ocultar montos" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+  <button class="iconbtn" data-click="abrirAjustes" aria-label="Ajustes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button></div></header>
 <main class="wrap">
   <div id="loading" class="center"><div>Cargando tus cuentas…</div></div>
   <div id="setup" class="setup hide">
@@ -476,27 +476,27 @@
       <input id="cfgApi" class="inp" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
       <label for="cfgKey">Clave</label>
       <input id="cfgKey" class="inp" autocomplete="off">
-      <button class="btn block" style="margin-top:16px" onclick="guardarConfigConexion()">Conectar</button>
-      <button class="btn ghost block" style="margin-top:8px" onclick="modoDemo()">Probar con datos de ejemplo</button>
-      <button id="cfgCancel" class="btn ghost block hide" style="margin-top:8px" onclick="pintar()">Cancelar</button>
+      <button class="btn block" style="margin-top:16px" data-click="guardarConfigConexion">Conectar</button>
+      <button class="btn ghost block" style="margin-top:8px" data-click="modoDemo">Probar con datos de ejemplo</button>
+      <button id="cfgCancel" class="btn ghost block hide" style="margin-top:8px" data-click="pintar">Cancelar</button>
     </div>
   </div>
   <div id="view"></div>
 </main>
 
 <nav class="tabs hide" id="nav" aria-label="Secciones">
-  <button data-tab="Inicio" onclick="irA('Inicio')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
-  <button data-tab="Movimientos" onclick="irA('Movimientos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Movimientos</button>
-  <button class="fab" aria-label="Registrar movimiento" onclick="abrirRegistro()"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></button>
-  <button data-tab="Análisis" onclick="irA('Análisis')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Análisis</button>
-  <button data-tab="Cuentas" onclick="irA('Cuentas')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19M6.5 15h4"/></svg>Cuentas</button>
+  <button data-tab="Inicio" data-click="irA" data-click-a='["Inicio"]'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Inicio</button>
+  <button data-tab="Movimientos" data-click="irA" data-click-a='["Movimientos"]'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Movimientos</button>
+  <button class="fab" aria-label="Registrar movimiento" data-click="abrirRegistro"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></button>
+  <button data-tab="Análisis" data-click="irA" data-click-a='["Análisis"]'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Análisis</button>
+  <button data-tab="Cuentas" data-click="irA" data-click-a='["Cuentas"]'><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="3"/><path d="M2.5 10h19M6.5 15h4"/></svg>Cuentas</button>
 </nav>
 
-<div id="scrim" class="scrim hide" onclick="cerrarHoja()"></div>
+<div id="scrim" class="scrim hide" data-click="cerrarHoja"></div>
 <div id="sheet" class="sheet hide" role="dialog" aria-modal="true" aria-labelledby="hojaTitulo"></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="lock" class="lock hide" role="dialog" aria-modal="true" aria-labelledby="lockT"><div><div class="ico" aria-hidden="true">🔒</div><h2 id="lockT">Finanzas está bloqueada</h2>
-  <p class="muted" style="margin:0 0 18px">Usa tu huella para ver tus cuentas.</p><button class="btn" onclick="pedirHuella()">Desbloquear con huella</button></div></div>
+  <p class="muted" style="margin:0 0 18px">Usa tu huella para ver tus cuentas.</p><button class="btn" data-click="pedirHuella">Desbloquear con huella</button></div></div>
 <script src="app.js"></script>
 <script src="extras.js"></script>
 <script src="rapido.js"></script>
