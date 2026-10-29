@@ -10,6 +10,8 @@
  *     Así la URL /exec sigue siendo la misma y la app no se tiene que volver a configurar.
  *
  * Este archivo vive en GitHub, que es público: ahí la clave NUNCA se escribe, solo en tu Apps Script.
+ * Si ya configuraste los secretos de clasp en GitHub (ver .github/workflows/apps-script.yml), los pasos 1, 2 y 5
+ * los hace GitHub solo al fusionar a main; tú solo repites el 4 cuando el código pida permisos nuevos.
  *
  * Pestañas que usa: Registro, Cuentas, Categorías, Personas, Fijos, Config y Metas.
  * Lo nuevo de la v5: columna M "Ticket" en Registro (foto en tu Drive), pestaña "Patrimonio" (una foto de tus
@@ -78,6 +80,7 @@ function revisarClave(k) {
 
 function ejecutar(accion, args) {
   switch (accion) {
+    case 'ping': return 'ok';                              // lo usa GitHub para revisar que la versión nueva contesta
     case 'guardarMov': return guardarMov(args[0]);
     case 'borrarMov': return borrarMov(args[0]);
     case 'guardarPresupuesto': return guardarPresupuesto(args[0], args[1]);

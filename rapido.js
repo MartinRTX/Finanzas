@@ -34,11 +34,42 @@ function cuentaMencionada(s, tipo) {
   if (!mejor && /\bdebito\b/.test(s)) mejor = activas().find(c => c.tipo === 'Débito');
   return mejor;
 }
+// Números dichos con palabras ("mil quinientos", "doscientos treinta y cinco") → cifras. Un "un/una" suelto no se toca ("una pizza").
+const NUM_PAL = { cero: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10, once: 11, doce: 12, trece: 13,
+  catorce: 14, quince: 15, dieciseis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, veintiuno: 21, veintiun: 21, veintiuna: 21, veintidos: 22, veintitres: 23,
+  veinticuatro: 24, veinticinco: 25, veintiseis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29, treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70,
+  ochenta: 80, noventa: 90, cien: 100, ciento: 100, doscientos: 200, doscientas: 200, trescientos: 300, trescientas: 300, cuatrocientos: 400, cuatrocientas: 400,
+  quinientos: 500, quinientas: 500, seiscientos: 600, seiscientas: 600, setecientos: 700, setecientas: 700, ochocientos: 800, ochocientas: 800, novecientos: 900, novecientas: 900 };
+function palabrasANumeros(s) {
+  const pal = s.split(/(\s+)/), out = [];
+  for (let i = 0; i < pal.length;) {
+    const w = pal[i];
+    if (!(w in NUM_PAL) && w !== 'mil' && w !== 'millon' && w !== 'millones') { out.push(w); i++; continue; }
+    // "1.5 mil" o "2 millones": la cifra ya viene escrita, eso lo resuelve entenderLinea
+    if (!(w in NUM_PAL) && /\d$/.test(out.join('').trimEnd())) { out.push(w); i++; continue; }
+    // Junta la racha de palabras numéricas (con "y" en medio: "treinta y cinco")
+    let j = i, total = 0, actual = 0, palabras = 0;
+    while (j < pal.length) {
+      const x = pal[j];
+      if (/^\s+$/.test(x)) { j++; continue; }
+      if (x in NUM_PAL) { actual += NUM_PAL[x]; palabras++; j++; }
+      else if (x === 'mil') { actual = (actual || 1) * 1000; total += actual; actual = 0; palabras++; j++; }
+      else if (x === 'millon' || x === 'millones') { total = (total + (actual || 1)) * 1e6; actual = 0; palabras++; j++; }
+      else if (x === 'y' && j + 2 < pal.length && pal[j + 2] in NUM_PAL) { j++; }
+      else break;
+    }
+    if (palabras === 1 && /^(un|uno|una)$/.test(w)) { out.push(w); i++; continue; }
+    out.push(String(total + actual) + (j < pal.length ? ' ' : ''));
+    i = j;
+  }
+  return out.join('');
+}
 function entenderLinea(texto, base) {
   base = base || hoy();
   const original = String(texto || '').trim();
   let s = ' ' + sinAcentos(original).replace(/\$/g, ' ').replace(/(\d),(\d{3})\b/g, '$1$2') + ' ';
   if (!original) return null;
+  s = palabrasANumeros(s);
   // "2 mil", "mil 500", "230 con 50"
   s = s.replace(/(\d+(?:\.\d+)?)\s*mil\s+(\d{1,3})\b/g, (_, a, b) => ' ' + (parseFloat(a) * 1000 + +b) + ' ').replace(/(\d+(?:\.\d+)?)\s*mil\b/g, (_, a) => ' ' + parseFloat(a) * 1000 + ' ')
        .replace(/\bmil\s+(\d{1,3})\b/g, (_, b) => ' ' + (1000 + +b) + ' ').replace(/\bmil\b/g, ' 1000 ').replace(/\b(\d+)\s+con\s+(\d{1,2})\b/g, '$1.$2');
@@ -58,11 +89,20 @@ function entenderLinea(texto, base) {
     const dw = DIAS_SEMANA.findIndex(d => new RegExp('\\b(el )?' + d + '\\b').test(resto));
     if (dw >= 0) { const hoyD = new Date(base + 'T12:00:00').getDay(); fecha = sumarDias(base, -(((hoyD - dw) + 7) % 7 || 7)); quitar(new RegExp('\\b(el )?' + DIAS_SEMANA[dw] + '\\b')); }
   }
+  // "el 15": día del mes (solo si además hay otro número para el monto)
+  const nums = () => resto.match(/\b\d+(?:\.\d{1,2})?\b/g) || [];
+  const elDia = fecha === base && resto.match(/\bel (\d{1,2})\b/);
+  if (elDia && +elDia[1] >= 1 && +elDia[1] <= 31 && nums().length >= 2) {
+    const d = +elDia[1], mk = base.slice(0, 7), f = conDia(mk, d);
+    fecha = f <= base ? f : conDia(mesSig(mk, -1), d);
+    quitar(elDia[0]);
+  }
   if (fecha > hoy()) fecha = hoy();
-  // Monto: el primer número que no sea parte de la fecha ni de los meses
-  const nm = resto.match(/\b\d+(?:\.\d{1,2})?\b/);
-  const monto = nm ? r2(parseFloat(nm[0])) : null;
-  if (nm) quitar(new RegExp('\\b' + nm[0].replace('.', '\\.') + '\\b'));
+  // Monto: el número más grande que no sea fecha ni meses ("7 eleven 85" → 85, "3 cafés 210" → 210); los demás se quedan en la descripción
+  const cand = nums().map(n => ({ t: n, v: parseFloat(n) })).sort((a, b) => b.v - a.v);
+  const nm = cand[0];
+  const monto = nm ? r2(nm.v) : null;
+  if (nm) resto = resto.replace(new RegExp('\\b' + nm.t.replace('.', '\\.') + '\\b'), ' ');
   // Tipo
   const persona = personasActivas().find(p => new RegExp('\\b' + sinAcentos(p.nombre) + '\\b').test(s));
   let tipo = 'Gasto';
@@ -265,11 +305,18 @@ async function revisarRapidos() {
   if (hechos || revisar) toast((hechos ? 'Registré ' + hechos + (hechos === 1 ? ' gasto' : ' gastos') + ' que anotaste fuera de la app' : '') + (revisar ? (hechos ? '; ' : '') + revisar + ' para revisar en Inicio' : ''));
 }
 // Compras detectadas que confirmaste con "Registrar" en la notificación: se guardan solas
+// ¿Ya registraste algo igual? Mismo tipo y monto, con un día de diferencia como máximo (en cualquier cuenta,
+// porque la tarjeta que adivina la notificación puede no ser la que elegiste tú)
+function yaRegistrado(tipo, monto, fecha) {
+  return DATA.movs.find(m => m.tipo === tipo && Math.abs(m.monto - monto) < 0.01 && Math.abs(difDias(m.fecha, fecha)) <= 1) || null;
+}
 function registrarDetectadoSolo(d) {
   const tipo = d.tipo === 'Ingreso' || d.tipo === 'Reembolso' ? d.tipo : 'Gasto';
   const cuenta = d.cuenta && cuentasPara(tipo).some(c => c.nombre === d.cuenta) ? d.cuenta : cuentaPorDefecto(tipo);
   const categoria = adivinarCategoria(d.comercio, tipo === 'Ingreso' ? 'Ingreso' : 'Gasto');
   if (!(d.monto > 0) || !cuenta || !categoria || d.otraMoneda) return false;
+  // Si parece que ya lo registraste a mano, no se guarda otra vez: se queda en Inicio para que tú decidas
+  if (yaRegistrado(tipo, d.monto, claveDia(new Date(d.cuando)))) return false;
   encolar('guardarMov', [movDeLinea({ tipo, monto: d.monto, fecha: claveDia(new Date(d.cuando)), cuenta, categoria, desc: d.comercio })], true);
   quitarDetectado(d.id);
   return true;

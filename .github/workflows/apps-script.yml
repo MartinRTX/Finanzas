@@ -1,0 +1,103 @@
+# Publica apps-script/Codigo.gs en tu proyecto de Apps Script sin copiar y pegar.
+# Se corre solo cuando cambia apps-script/ en main, o a mano desde la pestaña Actions.
+#
+# Qué hace:
+#  1. Baja lo que tienes hoy en Apps Script (para conservar tu clave, tus servicios y la zona horaria).
+#  2. Reemplaza el código por el de GitHub, pero con TU clave (la toma de lo que ya tienes, nunca se escribe en el repo).
+#  3. Crea una versión nueva y la pone en la MISMA implementación: la URL /exec no cambia y la app sigue igual.
+#  4. Le pregunta "ping" a la URL para confirmar que contesta con la versión nueva.
+#
+# Secretos (Settings > Secrets and variables > Actions):
+#  - CLASPRC_JSON: el contenido de ~/.clasprc.json después de "clasp login" (obligatorio).
+#  - APPS_SCRIPT_ID: el ID de tu proyecto (Apps Script > Configuración del proyecto > ID de secuencia de comandos) (obligatorio).
+#  - APPS_DEPLOYMENT_ID: el ID de la implementación que usa la app (lo que va entre /s/ y /exec en la URL).
+#    Opcional si solo tienes una implementación.
+# Si faltan, el flujo solo avisa y no hace nada: puedes seguir pegando el código a mano como siempre.
+name: Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps-script/**'
+      - '.github/workflows/apps-script.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-script
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      APPS_SCRIPT_ID: ${{ secrets.APPS_SCRIPT_ID }}
+      APPS_DEPLOYMENT_ID: ${{ secrets.APPS_DEPLOYMENT_ID }}
+    steps:
+      - name: ¿Ya están los secretos?
+        id: listo
+        run: |
+          if [ -z "$CLASPRC_JSON" ] || [ -z "$APPS_SCRIPT_ID" ]; then
+            echo "::notice::Faltan los secretos CLASPRC_JSON y/o APPS_SCRIPT_ID: no se publica nada. Pega Codigo.gs a mano o configura los secretos."
+            echo "seguir=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "seguir=si" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.listo.outputs.seguir == 'si'
+
+      - uses: actions/setup-node@v7
+        if: steps.listo.outputs.seguir == 'si'
+        with:
+          node-version: 22
+
+      - name: Publicar
+        if: steps.listo.outputs.seguir == 'si'
+        run: |
+          set -euo pipefail
+          npm install -g --no-audit --no-fund @google/clasp@3.4.1 >/dev/null
+          AUTH="$RUNNER_TEMP/clasprc.json"
+          printf '%s' "$CLASPRC_JSON" > "$AUTH"
+          D="$RUNNER_TEMP/script" && mkdir -p "$D" && cd "$D"
+          printf '{"scriptId":"%s","rootDir":".","scriptExtensions":[".gs"]}' "$APPS_SCRIPT_ID" > .clasp.json
+
+          # 1. Lo que hay hoy en Apps Script
+          clasp -A "$AUTH" pull
+          ls -la
+          ACTUAL=$(grep -l "^const CLAVE = '" ./*.gs | head -1 || true)
+          [ -n "$ACTUAL" ] || { echo "::error::No encontré el archivo con 'const CLAVE' en tu Apps Script"; exit 1; }
+          CLAVE=$(sed -n "s/^const CLAVE = '\(.*\)';.*/\1/p" "$ACTUAL" | head -1)
+          [ -n "$CLAVE" ] && [ "$CLAVE" != PON_AQUI_TU_CLAVE ] || { echo "::error::Tu Apps Script no tiene clave puesta; pégala a mano una vez"; exit 1; }
+          echo "::add-mask::$CLAVE"
+          export CLAVE
+
+          # 2. El código de GitHub con tu clave, en el mismo archivo (los demás archivos y el manifiesto se quedan igual)
+          python3 - "$GITHUB_WORKSPACE/apps-script/Codigo.gs" "$ACTUAL" <<'PY'
+          import os, sys
+          codigo = open(sys.argv[1], encoding='utf-8').read()
+          assert "const CLAVE = 'PON_AQUI_TU_CLAVE';" in codigo
+          codigo = codigo.replace("const CLAVE = 'PON_AQUI_TU_CLAVE';", "const CLAVE = '" + os.environ['CLAVE'].replace("\\", "\\\\").replace("'", "\\'") + "';", 1)
+          open(sys.argv[2], 'w', encoding='utf-8').write(codigo)
+          PY
+          clasp -A "$AUTH" push -f
+
+          # 3. Versión nueva en la misma implementación
+          DEP="${APPS_DEPLOYMENT_ID:-}"
+          if [ -z "$DEP" ]; then
+            clasp -A "$AUTH" --json list-deployments > deps.json
+            DEP=$(python3 -c "import json; d=[x['deploymentId'] for x in json.load(open('deps.json')) if x.get('versionNumber')]; print(d[0] if len(d)==1 else '')")
+            [ -n "$DEP" ] || { echo "::error::Tienes varias implementaciones (o ninguna): pon el secreto APPS_DEPLOYMENT_ID"; exit 1; }
+          fi
+          clasp -A "$AUTH" update-deployment "$DEP" -d "GitHub ${GITHUB_SHA::7}"
+
+          # 4. ¿Contesta?
+          R=$(python3 -c "import json,os; print(json.dumps({'k': os.environ['CLAVE'], 'action': 'ping'}))" | curl -sSL --max-time 60 -H 'Content-Type: text/plain' --data-binary @- "https://script.google.com/macros/s/$DEP/exec")
+          echo "Respuesta: $R"
+          echo "$R" | grep -q '"ok":true' || { echo "::error::La URL no contestó bien; revisa en Apps Script > Ejecuciones"; exit 1; }
+          echo "::notice::Apps Script actualizado (implementación ${DEP:0:12}…)"

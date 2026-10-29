@@ -1,6 +1,6 @@
 // Guarda la app en el celular para que abra rápido y funcione sin señal.
 // Cuando subas una versión nueva de la app, cambia el número de VERSION.
-const VERSION = 'fin-v7.1';
+const VERSION = 'fin-v7.2';
 const ARCHIVOS = [
   './', './index.html', './app.js', './extras.js', './rapido.js', './manifest.webmanifest', './bricolage.woff2', './fonts/inter.woff2',
   './icon-192.png', './favicon-32.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './sc-gasto.png', './sc-pagar.png', './sc-cuadrar.png', './sc-metas.png'
