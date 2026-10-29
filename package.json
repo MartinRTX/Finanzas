@@ -1,0 +1,11 @@
+{
+  "name": "finanzas",
+  "private": true,
+  "description": "App de finanzas de Martin (PWA + APK). Este archivo solo sirve para correr las pruebas.",
+  "scripts": {
+    "test": "node tests/pruebas.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

@@ -1,0 +1,40 @@
+# Corre las pruebas de la app en un Chromium de verdad cada vez que se sube algo.
+# Si algo falla, el pull request se marca en rojo y no se debe fusionar.
+# Las mismas pruebas se corren en local con: npm install && npx playwright install chromium && npm test
+name: Pruebas
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Revisar que el código no tenga errores de sintaxis
+        run: |
+          for f in app.js extras.js rapido.js sw.js; do node --check "$f"; done
+          # Codigo.gs es JavaScript de Apps Script: se revisa copiándolo con extensión .js
+          cp apps-script/Codigo.gs /tmp/Codigo.js && node --check /tmp/Codigo.js
+          # La clave real nunca debe estar en el repo (es público)
+          grep -q "const CLAVE = 'PON_AQUI_TU_CLAVE'" apps-script/Codigo.gs
+
+      - name: Instalar Playwright
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Pruebas en el navegador (modo demo, tema claro y oscuro, APK simulado)
+        run: npm test

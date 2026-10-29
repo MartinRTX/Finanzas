@@ -659,7 +659,8 @@ function tarjetaDetectados() {
   const ds = LS.get('fin_detectados', []);
   if (!ds.length) return '';
   return '<h2>Detecté en tus notificaciones<button class="more" onclick="LS.set(\'fin_detectados\',[]);pintar()">Descartar todo</button></h2><div class="list" style="margin-bottom:12px">' + ds.slice().reverse().slice(0, 4).map(d =>
-    '<div class="mv"><span class="ic" aria-hidden="true">🔔</span><span class="tx"><div class="d1">' + esc(d.comercio || d.banco) + '</div><div class="d2">' + esc(d.banco) + ' · ' + haceCuanto(d.cuando) + (d.otraMoneda ? ' · otra moneda' : '') + '</div></span>' +
+    '<div class="mv"><span class="ic" aria-hidden="true">🔔</span><span class="tx"><div class="d1">' + esc(d.comercio || d.banco) + '</div><div class="d2">' + esc(d.banco) + ' · ' + haceCuanto(d.cuando) +
+    (d.monto > 0 && yaRegistrado(d.tipo === 'Ingreso' || d.tipo === 'Reembolso' ? d.tipo : 'Gasto', d.monto, claveDia(new Date(d.cuando))) ? ' · <b>parece que ya lo registraste</b>' : '') + (d.otraMoneda ? ' · otra moneda' : '') + '</div></span>' +
     '<span class="m num' + (d.tipo === 'Gasto' ? '' : ' in') + '">' + (d.monto > 0 ? (d.tipo === 'Gasto' ? '−' : '+') + money(d.monto) : '¿?') + '</span></div>' +
     '<div class="det-acc"><button class="btn sm" onclick="registrarDetectado(\'' + jsq(d.id) + '\')">Registrar</button><button class="btn sm ghost" onclick="descartarDetectado(\'' + jsq(d.id) + '\')">No es gasto</button></div>').join('') + '</div>' +
     (ds.length > 4 ? '<p class="hint" style="margin-top:-6px">Y ' + (ds.length - 4) + ' más.</p>' : '');

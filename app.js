@@ -133,7 +133,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '7.1';
+const VERSION_APP = '7.2';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -569,7 +569,8 @@ function arrancar() {
     if (bloqueoOn() && OCULTA_DESDE && Date.now() - OCULTA_DESDE > 60000) pedirHuella();
     if (FORM && !$('sheet').classList.contains('show')) { $('sheet').classList.remove('hide'); $('scrim').classList.remove('hide'); $('sheet').classList.add('show'); $('scrim').classList.add('show'); pintarHoja(); }
     if (!FORM) fondoInerte(false);
-    enviar(); if (!FORM) actualizar(); revisarNativo();
+    // Al volver a la app solo se baja la hoja si pasó más de minuto y medio (antes se bajaba completa en cada cambio de app)
+    enviar(); if (!FORM && Date.now() - LS.get('fin_ultima', 0) > 90000) actualizar(); revisarNativo();
   });
   setInterval(enviar, 30000);
   setInterval(pintarSync, 60000);
