@@ -25,7 +25,7 @@ jobs:
 
       - name: Revisar que el código no tenga errores de sintaxis
         run: |
-          for f in app.js extras.js rapido.js sw.js; do node --check "$f"; done
+          for f in app.js extras.js rapido.js sw.js tema.js; do node --check "$f"; done
           # Codigo.gs es JavaScript de Apps Script: se revisa copiándolo con extensión .js
           cp apps-script/Codigo.gs /tmp/Codigo.js && node --check /tmp/Codigo.js
           # La clave real nunca debe estar en el repo (es público)

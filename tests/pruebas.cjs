@@ -168,9 +168,114 @@ async function inyeccion(b, base) {
     "agregarDetectados([{id:'x1',app:'com.bancomer.mbanking',texto:'Compra por $50.00 en '+__X+' con tu tarjeta',cuando:Date.now()}]);irA('Inicio')",
     "abrirImportar(__X)", "prepararRevision([{fecha:hoy(),desc:__X,monto:-50}],__X)", "RAPIDO_TXT='230 '+__X;irA('Inicio')", 'toast(__X)'];
   for (const s of pasos) { try { await p.evaluate(s); } catch (e) { ok(false, 'paso ' + s, e.message); } await p.waitForTimeout(60); }
-  const malos = await p.evaluate(() => [...document.querySelectorAll('[onclick]')].filter(e => { try { new Function(e.getAttribute('onclick')); return false; } catch (x) { return true; } }).length);
+  // Tocar los botones que llevan el nombre malicioso: abren lo correcto y no ejecutan nada
+  await p.evaluate(() => { cerrarHojaReal(); irA('Cuentas'); }); await p.waitForTimeout(300);
+  await p.locator('[data-click="abrirDetalle"]').filter({ hasText: 'pwned' }).first().click(); await p.waitForTimeout(120);
+  ok(await p.evaluate(() => FORM && FORM.nombre === __X), 'el botón de una cuenta con nombre raro abre esa cuenta');
+  await p.evaluate(() => cerrarHojaReal()); await p.waitForTimeout(280);
   ok(golpes.length === 0, 'ningún nombre malicioso ejecuta código', golpes);
-  ok(malos === 0, 'botones con código válido', malos);
+  ok(p.errores.filter(e => !/Failed to load resource/.test(e)).length === 0, 'inyección sin errores', p.errores);
+  await p.context().close();
+}
+
+// Revisa la pantalla actual: nada de onclick="…" y cada botón apunta a una función de la app con argumentos válidos
+async function revisarAcciones(p) {
+  return p.evaluate(() => {
+    const malos = [];
+    document.querySelectorAll('*').forEach(el => {
+      for (const a of el.attributes) {
+        if (/^on/i.test(a.name)) malos.push(el.tagName + ' ' + a.name);
+        const m = a.name.match(/^data-(click|input|change|keydown|focus|mousedown)$/);
+        if (m) {
+          if (!accionDe(a.value)) malos.push(a.name + '=' + a.value);
+          const args = el.getAttribute(a.name + '-a');
+          if (args) try { if (!Array.isArray(JSON.parse(args))) malos.push(a.value + ' args'); } catch (e) { malos.push(a.value + ' args: ' + args); }
+        }
+      }
+    });
+    return malos;
+  });
+}
+
+async function botones(b, base) {
+  console.log('• Botones (sin código en el HTML, con CSP estricta)');
+  const p = await nuevaPagina(b, base);
+  // Todas las acciones escritas en el código existen como funciones de la app
+  const fuente = ['index.html', 'app.js', 'extras.js', 'rapido.js'].map(f => fs.readFileSync(path.join(RAIZ, f), 'utf8')).join('\n');
+  const enLinea = fuente.match(/\son[a-z]+\s*=\s*\\?["']/gi);
+  ok(!enLinea, 'el código no escribe atributos onclick, onmousedown, etc.', enLinea);
+  const nombres = new Set([...fuente.matchAll(/al\('(?:click|input|change|keydown|focus|mousedown)', '(\w+)'/g)].map(m => m[1]).concat([...fuente.matchAll(/data-click="(\w+)"/g)].map(m => m[1]), ['detalleMes', 'detalleCatMes']));  // las de la gráfica llegan por variable
+  const faltan = await p.evaluate(l => l.filter(n => !accionDe(n)), [...nombres]);
+  ok(nombres.size > 80 && faltan.length === 0, 'cada acción del código es una función de la app (' + nombres.size + ')', faltan);
+  ok(await p.evaluate(() => !accionDe('alert') && !accionDe('eval') && !accionDe('open')), 'no se puede llamar a funciones del navegador');
+  ok(/script-src 'self';/.test(fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8')), 'CSP sin scripts en línea');
+  // Recorre pantallas y hojas
+  const malos = [];
+  for (const js of ["irA('Inicio')", "irA('Movimientos')", "irA('Cuentas')", ...['Este mes', 'Categorías', 'Resumen', 'Patrimonio', 'Tendencias', 'Semana'].map(t => "SUB_ANALISIS='" + t + "';irA('Análisis')")]) {
+    await p.evaluate(js); malos.push(...await revisarAcciones(p));
+  }
+  for (const js of ['abrirRegistro({})', "abrirRegistro({tipo:'Traspaso'})", 'abrirAjustes()', 'abrirAlcanza()', 'abrirProximos()', "abrirImportar('Revolut')", 'abrirMeta()', "abrirMeta(DATA.metas[0]&&DATA.metas[0].id)",
+    "abrirDetalle('BBVA Oro')", "abrirCuenta('BBVA Oro')", 'abrirNuevaCuenta()', 'abrirNuevaPersona()', 'abrirPersona(DATA.personas[0].nombre)', 'abrirFijo()', 'abrirFijo(DATA.fijos[0].id)',
+    'abrirPlan()', 'abrirHojaTicket()', 'abrirGuia()', "abrirCuadrar('BBVA Oro')", "abrirCategoria(DATA.categorias[0].nombre)"]) {
+    try { await p.evaluate(js); } catch (e) { malos.push(js + ': ' + e.message); continue; }
+    await p.waitForTimeout(60); malos.push(...(await revisarAcciones(p)).map(m => js + ' → ' + m));
+    await p.evaluate(() => cerrarHojaReal()); await p.waitForTimeout(260);
+  }
+  ok(malos.length === 0, 'todas las pantallas sin onclick y con acciones válidas', [...new Set(malos)].slice(0, 10));
+
+  // Toques de verdad (con un gasto de hace dos meses para que haya meses a dónde moverse)
+  await p.evaluate(() => DATA.movs.push({ id: 'viejo', fecha: mesSig(hoy().slice(0, 7), -2) + '-10', tipo: 'Gasto', monto: 40, cuenta: 'Efectivo', categoria: 'Otros', desc: 'Viejo' }));
+  await p.click('nav [data-tab="Movimientos"]'); await p.waitForTimeout(80);
+  ok(await p.evaluate(() => $('nav').querySelector('[data-tab="Movimientos"]').classList.contains('on') || /Movimientos/.test($('titulo').textContent)), 'la barra de abajo cambia de pantalla');
+  const mes = await p.evaluate(() => MES);
+  await p.click('.monthbar .arrow:not([disabled]) >> nth=0'); await p.waitForTimeout(60);
+  ok(await p.evaluate(m => MES === mesSig(m, -1) || MES === mesSig(m, 1), mes), 'flechas de mes');
+  await p.fill('#buscar', 'oxxo'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => BUSCA === 'oxxo'), 'buscar escribe en BUSCA');
+  await p.fill('#buscar', '');
+  await p.click('.chips [data-click="filtrar"] >> nth=1'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => FILTRO !== Object.keys(FILTROS)[0]), 'chip de filtro');
+  await p.click('nav [data-tab="Análisis"]'); await p.waitForTimeout(60);
+  await p.click('[data-click="verAnalisis"] >> text=Categorías'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => SUB_ANALISIS === 'Categorías'), 'chips de Análisis');
+  await p.click('[data-click="verAnalisis"] >> text=Semana'); await p.waitForTimeout(60);
+  await p.click('.monthbar .arrow >> nth=0'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => SEMANA === 1), 'semana anterior');
+  // Teclado sobre la gráfica (Enter = tocar)
+  await p.click('[data-click="verAnalisis"] >> text=Tendencias'); await p.waitForTimeout(60);
+  const barra = p.locator('rect.hit').last();
+  if (await barra.count()) { await barra.focus(); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+    ok(await p.evaluate(() => $('sheet').classList.contains('show') || /detalle|Categorías/.test(document.body.innerText)), 'Enter en una barra de la gráfica la abre');
+    await p.evaluate(() => cerrarHojaReal()); await p.waitForTimeout(260); }
+  // Registrar con toques
+  const antes = await p.evaluate(() => DATA.movs.length);
+  await p.click('nav .fab'); await p.waitForTimeout(250);
+  await p.evaluate(() => LS.del('fin_draft'));
+  await p.click('#fMonto'); await p.keyboard.type('125'); await p.keyboard.press('Enter'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => FORM.monto === '125' && document.activeElement.id !== 'fMonto'), 'monto se escribe y Enter suelta el teclado');
+  await p.fill('#fDesc', 'Prueba de botones'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => FORM.desc === 'Prueba de botones'), 'descripción se escribe');
+  await p.click('[data-click="fechaHoy"]'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => FORM.fecha === hoy()), 'botón Hoy');
+  await p.locator('[data-click="setForm"][data-click-a*="categoria"]').first().click(); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => !!FORM.categoria), 'elegir categoría con un toque');
+  await p.click('[data-click="guardarMovForm"]'); await p.waitForTimeout(250);
+  ok(await p.evaluate(n => DATA.movs.some(m => m.desc === 'Prueba de botones' && m.monto === 125), antes), 'guardar con toques registra el gasto',
+    await p.evaluate(n => ({ n: DATA.movs.length - n, ult: DATA.movs.slice(-2).map(m => [m.desc, m.monto, m.fecha]) }), antes));
+  // Guía: Siguiente y Atrás
+  await p.evaluate(() => abrirGuia()); await p.waitForTimeout(150);
+  await p.click('#sheet .actbar .btn:not(.ghost)'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => FORM.paso === 1), 'guía: Siguiente');
+  await p.click('#sheet .actbar .btn.ghost'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => FORM.paso === 0), 'guía: Atrás');
+  await p.click('#scrim', { position: { x: 20, y: 20 } }); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => !$('sheet').classList.contains('show')), 'tocar fuera cierra la hoja');
+  // Ajustes: tema
+  await p.evaluate(() => abrirAjustes()); await p.waitForTimeout(150);
+  await p.click('[data-click="elegirTema"][data-click-a*="light"]'); await p.waitForTimeout(60);
+  ok(await p.evaluate(() => LS.get('fin_tema') === 'light' && document.documentElement.dataset.theme === 'light'), 'Ajustes: elegir tema claro');
+  await p.evaluate(() => cerrarHojaReal()); await p.waitForTimeout(260);
+  ok(p.errores.length === 0, 'botones sin errores (ni bloqueos de la CSP)', p.errores);
   await p.context().close();
 }
 
@@ -232,7 +337,7 @@ async function importar(b, base) {
   const s = await servidor(), base = 'http://127.0.0.1:' + s.address().port;
   const b = await chromium.launch();
   try {
-    for (const prueba of [parser, humo, formulario, inyeccion, apk, importar]) await prueba(b, base);
+    for (const prueba of [parser, humo, formulario, inyeccion, botones, apk, importar]) await prueba(b, base);
   } catch (e) { ok(false, 'la prueba se cayó', e.message); }
   await b.close(); s.close();
   console.log('\n' + pasaron + ' revisiones pasaron, ' + fallas.length + ' fallaron.');
