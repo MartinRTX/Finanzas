@@ -192,7 +192,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '7.3';
+const VERSION_APP = '7.4';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -514,8 +514,17 @@ function comprasMSI(c) {
     return { m, pagadas, mensual: mensualidad(m), resta: r2(m.monto - mensualidad(m) * pagadas) };
   }).filter(x => x.pagadas < x.m.meses).sort((a, b) => (a.m.fecha < b.m.fecha ? 1 : -1));
 }
+// Mensualidades que el banco ya tiene programadas de compras a meses de antes de usar la app (la app no conoce esas compras).
+// Se capturan en Config → "Mensualidades anteriores": {"Nombre de la tarjeta": {"2026-12": 1004.01, ...}}, por mes de la fecha límite.
+function mensualidadesAnteriores(c) {
+  let t = null;
+  try { t = JSON.parse(DATA.config['Mensualidades anteriores'] || 'null'); } catch (e) {}
+  const m = t && typeof t === 'object' ? t[c.nombre] : null, out = {};
+  if (m && typeof m === 'object') Object.keys(m).forEach(mes => { const v = parseMonto(m[mes]); if (/^\d{4}-\d{2}$/.test(mes) && v > 0) out[mes] = r2(v); });
+  return out;
+}
 // Estado de cuenta que cerró en `k`: lo que debías al corte, sin lo que todavía no te cobran de compras a meses.
-// Es aproximado: sale de lo que registras (las compras a meses de antes de usar la app no las conoce).
+// Es aproximado: sale de lo que registras y de las mensualidades anteriores que captures.
 function estadoCuenta(c, k) {
   const ci = cicloTarjeta(c, k);
   if (!ci || k < c.fechaCorte) return null;
@@ -527,6 +536,9 @@ function estadoCuenta(c, k) {
     diferido += m.monto - mensualidad(m) * n;
     if (n > mensualidades(m, c, antes)) msi += mensualidad(m);
   });
+  // Las mensualidades anteriores de meses que vienen tampoco entran a este estado de cuenta
+  const ant = mensualidadesAnteriores(c), mp = ci.pago.slice(0, 7);
+  Object.keys(ant).forEach(mes => { if (mes > mp) diferido += ant[mes]; else if (mes === mp) msi += ant[mes]; });
   const alCorte = Math.max(0, -saldo(c, k) - diferido);
   const pagado = DATA.movs.filter(m => m.tipo === 'Traspaso' && m.aCuenta === c.nombre && m.fecha > k).reduce((s, m) => s + m.monto, 0);
   return { corte: k, limite: ci.pago, total: r2(alCorte), falta: r2(Math.max(0, alCorte - pagado)), msi: r2(msi) };
@@ -1283,6 +1295,8 @@ function hojaDetalle() {
       '<div class="muted">Aproximado con lo que registras' + (c.domiciliado ? '. Domiciliado desde ' + esc(c.domiciliado) + ': se registra solo en la fecha límite' : '') + '.</div>' : '') + '</div>';
   if (deuda && c.limite) h += '<div class="card">' + htmlUso(c) + '</div>';
   const msi = deuda ? comprasMSI(c) : [];
+  const ant = deuda ? htmlMensualidadesAnteriores(c) : '';
+  if (ant) h += ant;
   if (msi.length) h += '<div class="fl">Compras a meses</div><div class="card" style="padding:4px 16px">' + msi.map(x =>
     '<div class="qrow"><span>' + esc(x.m.desc || x.m.categoria) + '<br><span class="muted">' + x.pagadas + ' de ' + x.m.meses + ' mensualidades · ' + money(x.mensual) + ' al mes</span></span><b class="num">' + money(x.resta) + '</b></div>').join('') +
     '<div class="qrow tot"><span>Te faltan por pagar</span><b class="num">' + money(msi.reduce((t, x) => t + x.resta, 0)) + '</b></div></div>';
@@ -1295,6 +1309,24 @@ function hojaDetalle() {
   if (movs.length > 30) h += '<button class="btn ghost block" style="margin-top:10px" ' + al('click', 'buscarCuenta', c.nombre) + '>Ver todos</button>';
   h += '<div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
   return h;
+}
+
+// Calendario de mensualidades anteriores, juntando los meses seguidos con el mismo monto ("marzo – mayo 2027 · $362.53 al mes")
+function htmlMensualidadesAnteriores(c) {
+  const ant = mensualidadesAnteriores(c), ci = cicloTarjeta(c, hoy()), desde = ci ? ci.pago.slice(0, 7) : hoy().slice(0, 7);
+  const meses = Object.keys(ant).filter(mes => mes >= desde).sort();
+  if (!meses.length) return '';
+  const tramos = [];
+  meses.forEach(mes => {
+    const t = tramos[tramos.length - 1];
+    if (t && t.monto === ant[mes] && mesSig(t.hasta, 1) === mes) t.hasta = mes; else tramos.push({ desde: mes, hasta: mes, monto: ant[mes] });
+  });
+  const nombre = t => t.desde === t.hasta ? nombreMes(t.desde)
+    : MESES[+t.desde.slice(5, 7) - 1] + (t.desde.slice(0, 4) === t.hasta.slice(0, 4) ? '' : ' ' + t.desde.slice(0, 4)) + ' – ' + nombreMes(t.hasta);
+  return '<div class="fl">Pagos de compras anteriores</div><div class="card" style="padding:4px 16px">' + tramos.map(t =>
+    '<div class="qrow"><span>' + nombre(t) + (t.desde === t.hasta ? '' : '<br><span class="muted">' + money(t.monto) + ' al mes</span>') + '</span><b class="num">' + money(t.monto) + '</b></div>').join('') +
+    '<div class="qrow tot"><span>Te faltan por pagar</span><b class="num">' + money(meses.reduce((s, mes) => s + ant[mes], 0)) + '</b></div>' +
+    '<div class="muted" style="padding-bottom:8px">Lo que el banco ya tiene programado de compras a meses de antes. Ya está contado en el pago de cada mes.</div></div>';
 }
 
 /* ---- Guía de la primera vez ---- */
