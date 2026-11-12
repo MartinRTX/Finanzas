@@ -5,7 +5,7 @@
 
 /* ===================== Entender una línea: "230 oxxo", "650 gasolina débito ayer", "1200 amazon 6 msi" ===================== */
 const DIAS_SEMANA = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-const RELLENO = /^(en|de|del|con|por|para|la|el|los|las|le|les|lo|un|una|al|a|y|gaste|gasté|pague|pagué|compre|compré|fue|fueron|me|mi|mis|pesos?|varos|baros|mxn|hoy|ayer|antier|anteayer|tarjeta|cuenta|ponle|registra|anota)$/i;
+const RELLENO = /^(en|de|del|con|por|para|la|el|los|las|le|les|lo|un|una|al|a|y|gaste|gasté|pague|pagué|compre|compré|fue|fueron|me|mi|mis|pesos?|pesitos|varos|baros|centavos|mxn|hoy|ayer|antier|anteayer|tarjeta|cuenta|ponle|registra|anota|unos|unas|como|aprox|aproximadamente|se|son)$/i;
 // Palabras que apuntan a una categoría aunque no digas el comercio
 const PISTAS_CAT = [
   [/\b(gas|gasolina|gasolinera|diesel|magna|premium)\b/, 'Gasolina'],
@@ -111,7 +111,7 @@ function entenderLinea(texto, base) {
   else if (persona && /\b(me presto|me prestaron)\b/.test(s)) tipo = 'Me prestaron';
   else if (persona && /\b(le pague|le pagué)\b/.test(s)) tipo = 'Le pagué';
   else if (/\b(me devolvieron|reembolso|me reembolsaron)\b/.test(s)) tipo = 'Reembolso';
-  else if (/\b(ingreso|quincena|nomina|sueldo|me pagaron|me depositaron|cobre|recibi|me cayo)\b/.test(s)) tipo = 'Ingreso';
+  else if (/\b(ingreso|quincena|nomina|sueldo|me pagaron|me depositaron|cobre|recibi|me cayo|rendimientos?|intereses ganados)\b/.test(s)) tipo = 'Ingreso';
   else if (/\b(pague|pago|abone|abono)\b.*\b(tarjeta|oro|credito|prestamo|revolut premium|mercado pago credito)\b/.test(s) && !/\b(con|en)\s+(la\s+)?(tarjeta|oro|credito)\b/.test(s)) tipo = 'Traspaso';
   if (persona) quitar(new RegExp('\\b' + sinAcentos(persona.nombre) + '\\b'));
   quitar(/\b(preste|prestamo|le di prestado|me pago|me pagaron|me devolvio|me regreso|me presto|me prestaron|le pague|me devolvieron|reembolso|me reembolsaron|ingreso|me depositaron|cobre|recibi|me cayo|abone|abono)\b/g);
@@ -140,12 +140,49 @@ function entenderLinea(texto, base) {
     categoria = cats.find(n => s.includes(' ' + sinAcentos(n) + ' ')) || null;
     if (!categoria) { const p = PISTAS_CAT.find(x => x[0].test(s)); if (p && cats.indexOf(p[1]) >= 0) categoria = p[1]; }
     if (!categoria || categoria === 'Otros') categoria = adivinarCategoria(desc || original, 'Gasto') || categoria;
-  } else if (tipo === 'Ingreso') categoria = adivinarCategoria(desc || original, 'Ingreso');
+  } else if (tipo === 'Ingreso') {
+    const ci = catsIngreso().map(x => x.nombre);
+    categoria = /\brendimientos?\b|intereses ganados/.test(s) && ci.indexOf('Rendimientos') >= 0 ? 'Rendimientos'
+      : ci.find(n => s.includes(' ' + sinAcentos(n) + ' ')) || adivinarCategoria(desc || original, 'Ingreso');
+  }
   if (!desc && categoria) desc = '';
   const cuentaObj = DATA.cuentas.find(x => x.nombre === cuenta);
-  return { tipo, monto, fecha, cuenta, aCuenta, categoria, desc, persona: persona ? persona.nombre : null,
-           meses: meses && tipo === 'Gasto' && cuentaObj && cuentaObj.tipo === 'Crédito' ? meses : null,
-           ok: monto > 0 && !!cuenta && (tipo === 'Traspaso' ? !!aCuenta && aCuenta !== cuenta : esPersonaTipo(tipo) ? !!persona : !!categoria) };
+  const e = { tipo, monto, fecha, cuenta, aCuenta, categoria, desc, persona: persona ? persona.nombre : null, texto: original,
+              meses: meses && tipo === 'Gasto' && cuentaObj && cuentaObj.tipo === 'Crédito' ? meses : null,
+              fechaDicha: fecha !== base, cuentaDicha: !!c };
+  e.ok = lineaCompleta(e);
+  return e;
+}
+const lineaCompleta = e => e.monto > 0 && !!e.cuenta && (e.tipo === 'Traspaso' ? !!e.aCuenta && e.aCuenta !== e.cuenta : esPersonaTipo(e.tipo) ? !!e.persona : !!e.categoria);
+// Varias cosas en una frase: "230 en oxxo y 120 de tacos con débito ayer" → dos movimientos.
+// Solo se parte donde los dos lados traen monto; la fecha o la cuenta que digas una vez valen para todos.
+const SEPARADOR = /(\s*(?:,|;|\by luego\b|\by tambien\b|\by también\b|\bademas\b|\bademás\b|\by\b)\s+)/i;
+const DECENAS_Y = /\b(treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\s+y\s+(?=(un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)\b)/gi;
+function entenderVarias(texto, base) {
+  const t = String(texto || '').trim().replace(DECENAS_Y, '$1 \u00A4 ');     // "treinta y cinco" no se parte
+  if (!t) return [];
+  const conMonto = x => /\d/.test(palabrasANumeros(' ' + sinAcentos(x).toLowerCase() + ' '));
+  const trozos = t.split(SEPARADOR), partes = [];
+  for (let i = 0; i < trozos.length; i += 2) {
+    const txt = trozos[i], sep = trozos[i - 1] || '';
+    if (!txt || !txt.trim()) continue;
+    if (partes.length && (!conMonto(txt) || !conMonto(partes[partes.length - 1]))) partes[partes.length - 1] += sep + txt;
+    else partes.push(txt);
+  }
+  const lista = partes.map(x => entenderLinea(x.replace(/\u00A4/g, 'y'), base)).filter(Boolean);
+  if (lista.length < 2) return lista;
+  const conFecha = lista.find(e => e.fechaDicha), conCuenta = lista.find(e => e.cuentaDicha), conPersona = lista.find(e => esPersonaTipo(e.tipo));
+  lista.forEach(e => {
+    // "le presté 500 a Aaron y 300 a Lore": lo de Lore también es préstamo, no un gasto
+    const nombre = !esPersonaTipo(e.tipo) && conPersona && personasActivas().find(p => new RegExp('\\b' + sinAcentos(p.nombre) + '\\b').test(sinAcentos(e.texto)));
+    if (nombre) Object.assign(e, { tipo: conPersona.tipo, persona: nombre.nombre, categoria: null, aCuenta: null,
+      cuenta: cuentasPara(conPersona.tipo).some(c => c.nombre === e.cuenta) ? e.cuenta : conPersona.cuenta,
+      desc: e.desc.replace(new RegExp('\\b(a |de )?' + nombre.nombre + '\\b', 'i'), '').trim() });
+    if (conFecha && !e.fechaDicha) e.fecha = conFecha.fecha;
+    if (conCuenta && !e.cuentaDicha && e.tipo !== 'Traspaso' && cuentasPara(e.tipo).some(c => c.nombre === conCuenta.cuenta)) e.cuenta = conCuenta.cuenta;
+    e.ok = lineaCompleta(e);
+  });
+  return lista;
 }
 function movDeLinea(e, extra) {
   return Object.assign({ id: uid(), fecha: e.fecha, tipo: e.tipo, monto: e.monto, cuenta: e.cuenta, aCuenta: e.tipo === 'Traspaso' ? e.aCuenta : '',
@@ -167,7 +204,7 @@ function resumenLinea(e) {
 /* ===================== Barra rápida de Inicio ===================== */
 let RAPIDO_TXT = '';
 function barraRapida() {
-  const e = RAPIDO_TXT.trim() ? entenderLinea(RAPIDO_TXT) : null;
+  const e = RAPIDO_TXT.trim() ? entenderVarias(RAPIDO_TXT) : null;
   return '<div class="rapido-bar"><label class="sr" for="rapido">Registrar en una línea</label>' +
     '<input id="rapido" class="inp" placeholder="Escribe o dicta: 230 oxxo" enterkeyhint="send" autocomplete="off" value="' + esc(RAPIDO_TXT) + '" ' + al('input', 'escribirRapido') + ' ' + al('keydown', 'enterRapido') + '>' +
     '<button class="iconbtn" ' + al('click', 'dictar', 'barra') + ' aria-label="Dictar un gasto">' + ICON_MIC + '</button>' +
@@ -176,26 +213,32 @@ function barraRapida() {
 }
 const ICON_MIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
 const ICON_ENVIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-function htmlPreview(e) {
-  if (!e) return '<span class="muted">Ej. "650 gasolina", "120 tacos débito ayer", "1200 amazon 6 msi", "le presté 500 a Aaron"</span>';
-  return '<button class="prev ' + (e.ok ? 'ok' : '') + '" ' + al('click', 'editarRapido') + '>' + esc(resumenLinea(e)) + '<span class="muted"> · ' + (e.ok ? 'Enter para guardar, toca para cambiar' : 'toca para completar') + '</span></button>';
+function htmlPreview(l) {
+  if (!l || !l.length) return '<span class="muted">Ej. "650 gasolina", "120 tacos débito ayer", "230 oxxo y 85 café", "le presté 500 a Aaron"</span>';
+  const todas = l.every(e => e.ok);
+  return l.map((e, i) => '<button class="prev ' + (e.ok ? 'ok' : '') + '" ' + al('click', 'editarRapido', i) + '>' + esc(resumenLinea(e)) + '<span class="muted"> · ' +
+    (l.length > 1 ? (e.ok ? 'toca para cambiar' : 'toca para completar') : e.ok ? 'Enter para guardar, toca para cambiar' : 'toca para completar') + '</span></button>').join('') +
+    (l.length > 1 ? '<div class="muted" style="font-size:12.5px;margin-top:2px">' + l.length + ' movimientos · ' + (todas ? 'Enter los guarda todos' : 'Enter guarda los completos') + '</div>' : '');
 }
-function previewRapido() { const p = $('rapidoPrev'); if (p) p.innerHTML = htmlPreview(RAPIDO_TXT.trim() ? entenderLinea(RAPIDO_TXT) : null); }
-function editarRapido() {
-  const e = entenderLinea(RAPIDO_TXT); if (!e) return;
-  RAPIDO_TXT = '';
+function previewRapido() { const p = $('rapidoPrev'); if (p) p.innerHTML = htmlPreview(RAPIDO_TXT.trim() ? entenderVarias(RAPIDO_TXT) : null); }
+// Abre en el formulario uno de los movimientos de la barra; los demás se quedan en la barra
+function editarRapido(i) {
+  const l = entenderVarias(RAPIDO_TXT), e = l[i || 0]; if (!e) return;
+  RAPIDO_TXT = l.filter(x => x !== e).map(x => x.texto).join(', ');
   abrirRegistro({ tipo: e.tipo, monto: e.monto || '', desc: e.desc, categoria: e.categoria, cuenta: e.cuenta, aCuenta: e.aCuenta, persona: e.persona, fecha: e.fecha });
   if (e.meses) { FORM.msi = true; FORM.meses = e.meses; pintarHoja(); }
 }
 function enviarRapido() {
-  const e = RAPIDO_TXT.trim() ? entenderLinea(RAPIDO_TXT) : null;
-  if (!e) { const i = $('rapido'); if (i) i.focus(); return; }
-  if (!e.ok) return editarRapido();
-  const m = movDeLinea(e);
-  encolar('guardarMov', [m]);
-  LS.set('fin_ult_cuenta_' + m.tipo, m.cuenta);
-  RAPIDO_TXT = ''; vibrar(15); pintar();
-  toast((m.tipo === 'Gasto' ? 'Gasto' : m.tipo) + ' ' + money(m.monto) + (m.categoria ? ' · ' + m.categoria : '') + ' guardado', { txt: 'Deshacer', fn: () => encolar('borrarMov', [m.id]) });
+  const l = RAPIDO_TXT.trim() ? entenderVarias(RAPIDO_TXT) : [];
+  if (!l.length) { const i = $('rapido'); if (i) i.focus(); return; }
+  const listos = l.filter(e => e.ok), faltan = l.filter(e => !e.ok);
+  if (!listos.length) return editarRapido(l.indexOf(faltan[0]));
+  const ms = listos.map((e, i) => movDeLinea(e, { registrado: Date.now() + i }));
+  ms.forEach(m => { encolar('guardarMov', [m], true); LS.set('fin_ult_cuenta_' + m.tipo, m.cuenta); });
+  RAPIDO_TXT = faltan.map(e => e.texto).join(', '); vibrar(15); pintar();
+  const m = ms[0], undo = { txt: 'Deshacer', fn: () => { ms.forEach(x => encolar('borrarMov', [x.id], true)); pintar(); } };
+  if (ms.length === 1 && !faltan.length) toast((m.tipo === 'Gasto' ? 'Gasto' : m.tipo) + ' ' + money(m.monto) + (m.categoria ? ' · ' + m.categoria : '') + ' guardado', undo);
+  else toast('Guardé ' + ms.length + (ms.length === 1 ? ' movimiento' : ' movimientos') + ' (' + money(ms.reduce((s, x) => s + x.monto, 0)) + ')' + (faltan.length ? '; completa lo que quedó en la barra' : ''), undo);
 }
 
 /* ===================== Favoritos: tus gastos frecuentes en un toque ===================== */
@@ -238,46 +281,94 @@ function favoritosWidget() {
 }
 
 /* ===================== Dictado ===================== */
+// Habla natural: "gasté 230 en Oxxo y 120 de tacos con débito", "me pagó Missa mil", "¿cuánto me queda?", "borra el último"
 let ESCUCHANDO = false;
 async function dictar(destino) {
   if (ESCUCHANDO) return;
   let texto = null;
   ESCUCHANDO = true; document.body.classList.add('escuchando');
+  const enBarra = destino !== 'form', barra = () => $('rapido');
   try {
     if (NATIVO) {
       await window.Capacitor.nativePromise('SpeechRecognition', 'requestPermissions', {});
-      const r = await window.Capacitor.nativePromise('SpeechRecognition', 'start', { language: 'es-MX', maxResults: 1, partialResults: false, popup: true });
+      const r = await window.Capacitor.nativePromise('SpeechRecognition', 'start', { language: 'es-MX', maxResults: 1, partialResults: false, popup: true, prompt: 'Ej. "230 en Oxxo y 120 de tacos"' });
       texto = r && r.matches && r.matches[0];
     } else {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) { toast('Tu navegador no deja dictar; usa Chrome o la app de Android'); return; }
       toast('Te escucho…');
       texto = await new Promise((ok, mal) => {
-        const rec = new SR(); let dado = null;
-        rec.lang = 'es-MX'; rec.interimResults = false; rec.maxAlternatives = 1;
-        rec.onresult = ev => { dado = ev.results[0][0].transcript; };
+        const rec = new SR(); let final = '';
+        rec.lang = 'es-MX'; rec.interimResults = true; rec.maxAlternatives = 1;
+        // Lo que vas diciendo aparece en la barra mientras hablas
+        rec.onresult = ev => {
+          let parcial = '';
+          for (let i = ev.resultIndex; i < ev.results.length; i++) { if (ev.results[i].isFinal) final += ev.results[i][0].transcript; else parcial += ev.results[i][0].transcript; }
+          if (enBarra && barra()) { barra().value = (final + parcial).trim(); RAPIDO_TXT = barra().value; previewRapido(); }
+        };
         rec.onerror = ev => mal(new Error(ev.error));
-        rec.onend = () => ok(dado);
+        rec.onend = () => ok(final.trim() || (enBarra && barra() ? barra().value.trim() : ''));
         rec.start();
       });
     }
   } catch (e) { toast(/not-allowed|denied|permission/i.test(String(e && e.message)) ? 'Dale permiso de micrófono a Finanzas' : 'No te escuché, intenta otra vez'); }
   finally { ESCUCHANDO = false; document.body.classList.remove('escuchando'); }
   if (!texto) return;
+  if (comandoVoz(texto)) return;
+  const l = entenderVarias(texto);
   if (destino === 'form' && FORM && FORM.vista === 'mov') {
-    const e = entenderLinea(texto);
+    const e = l[0];
     if (!e) return;
     ['tipo', 'cuenta', 'aCuenta', 'categoria', 'persona', 'fecha'].forEach(k => { if (e[k]) FORM[k] = e[k]; });
     if (e.monto) FORM.monto = String(e.monto);
     if (e.desc) FORM.desc = e.desc;
     if (e.meses) { FORM.msi = true; FORM.meses = e.meses; }
     FORM.err = ''; pintarHoja(); vibrar(12);
-    toast('Escuché: "' + texto + '"');
+    if (l.length > 1) { RAPIDO_TXT = l.slice(1).map(x => x.texto).join(', '); toast('Escuché ' + l.length + ' cosas: aquí va la primera; las demás quedaron en la barra de Inicio'); }
+    else toast('Escuché: "' + texto + '"');
   } else {
     RAPIDO_TXT = texto;
     if (TAB !== 'Inicio') irA('Inicio'); else pintar();
-    toast('Escuché: "' + texto + '". Revisa y toca guardar');
+    toast('Escuché: "' + texto + '". ' + (l.length > 1 ? 'Son ' + l.length + ' movimientos; revisa y toca guardar' : 'Revisa y toca guardar'));
   }
+}
+// Preguntas y órdenes por voz. Contesta en pantalla y, si el celular puede, en voz alta.
+function decir(t) {
+  toast(t, null, 6000);
+  try { if (window.speechSynthesis && window.SpeechSynthesisUtterance) { const u = new SpeechSynthesisUtterance(t.replace(/\$/g, '')); u.lang = 'es-MX'; speechSynthesis.cancel(); speechSynthesis.speak(u); } } catch (e) { /* sin voz */ }
+}
+function comandoVoz(texto) {
+  const s = ' ' + sinAcentos(texto).replace(/[¿?¡!.,]/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+  if (/^ (cancela|cancelar|olvidalo|nada|nada mas) $/.test(s)) { toast('Cancelado'); return true; }
+  if (/\b(como voy a quedar|como voy a terminar|me va a alcanzar|cuanto voy a tener)\b/.test(s)) { if (typeof abrirFlujo === 'function') abrirFlujo(); return true; }
+  if (/\bcuadra(r)?\b/.test(s) && /\b(todo|todas|cuentas)\b/.test(s) && !/\d/.test(s)) { if (typeof abrirCuadrarTodo === 'function') abrirCuadrarTodo(); return true; }
+  if (/\b(borra|borrar|deshaz|deshacer|quita|quitar|corrige|corregir)\b.*\bultimo\b/.test(s)) {
+    const m = DATA.movs.filter(x => x.registrado && Date.now() - x.registrado < 2 * 3600e3).sort((a, b) => b.registrado - a.registrado)[0];
+    if (!m) { decir('No registraste nada en las últimas dos horas.'); return true; }
+    editarMov(m.id); decir('Abrí tu último movimiento: ' + (m.desc || m.categoria || m.tipo) + ', ' + money(m.monto) + '. Ahí lo puedes borrar o corregir.');
+    return true;
+  }
+  if (!/\bcuanto\b|\bcomo voy\b/.test(s)) return false;
+  const p = patrimonio(), persona = personasActivas().find(x => new RegExp('\\b' + sinAcentos(x.nombre) + '\\b').test(s));
+  if (persona && /\b(debe|debo|le debo|me debe)\b/.test(s)) {
+    const v = saldoPersona(persona);
+    decir(v > 0 ? persona.nombre + ' te debe ' + money(v) + '.' : v < 0 ? 'Le debes ' + money(-v) + ' a ' + persona.nombre + '.' : 'Tú y ' + persona.nombre + ' están a mano.'); return true;
+  }
+  if (/\b(me deben)\b/.test(s)) { decir('Te deben ' + money(p.teDeben) + ' en total.'); return true; }
+  if (/\b(me queda|me quedan|puedo gastar|como voy)\b/.test(s)) {
+    const rq = rangoQuincena(hoy()), queda = r2(resumenMes(hoy().slice(0, 7)).presupuesto / 2 - gastoNeto(rq.desde, rq.hasta));
+    decir(queda >= 0 ? 'Te quedan ' + money(queda, true) + ' para gastar esta quincena.' : 'Esta quincena ya te pasaste ' + money(-queda, true) + ' del presupuesto.'); return true;
+  }
+  if (/\b(debo|deuda)\b/.test(s)) { decir('Debes ' + money(p.deuda) + ' en tus tarjetas y préstamos.'); return true; }
+  if (/\b(tengo|hay|disponible)\b/.test(s)) { decir('Tienes ' + money(p.disp) + ' disponibles en tus cuentas.'); return true; }
+  if (/\b(llevo|gaste|he gastado|va gastado|gastado)\b/.test(s)) {
+    const mk = hoy().slice(0, 7), r = resumenMes(mk), cat = catsGasto().find(c => s.includes(' ' + sinAcentos(c.nombre) + ' ')) || (PISTAS_CAT.find(x => x[0].test(s)) || [])[1];
+    const c = typeof cat === 'string' ? catsGasto().find(x => x.nombre === cat) : cat;
+    if (c) { const n = netoCat(r, c.nombre); decir('En ' + c.nombre + ' llevas ' + money(n, true) + ' este mes' + (c.presupuesto ? ', de ' + money(c.presupuesto, true) + ' de presupuesto.' : '.')); }
+    else decir('Este mes llevas ' + money(r.neto, true) + ' gastados de ' + money(r.presupuesto, true) + '.');
+    return true;
+  }
+  return false;
 }
 
 /* ===================== Lo que anotaste fuera de la app (notificaciones y widget de atajos) ===================== */
@@ -296,8 +387,9 @@ async function revisarRapidos() {
       try { const f = JSON.parse(t.slice(8)); encolar('guardarMov', [movDeLinea({ tipo: 'Gasto', monto: f.m, fecha: base, cuenta: f.cu, categoria: f.c, desc: f.d })], true); hechos++; } catch (e) { /* favorito viejo */ }
       return;
     }
-    const e = entenderLinea(t, base);
-    if (e && e.ok) { encolar('guardarMov', [movDeLinea(e, { registrado: x.cuando || Date.now() })], true); hechos++; }
+    const l = entenderVarias(t, base), e = l[0];
+    if (l.length > 1 && l.every(y => y.ok)) { l.forEach((y, i) => encolar('guardarMov', [movDeLinea(y, { registrado: (x.cuando || Date.now()) + i })], true)); hechos += l.length; }
+    else if (e && e.ok && l.length === 1) { encolar('guardarMov', [movDeLinea(e, { registrado: x.cuando || Date.now() })], true); hechos++; }
     else { det.push({ id: x.id, banco: 'Anotado', texto: t, cuando: x.cuando, monto: e && e.monto || 0, comercio: t, tipo: e ? e.tipo : 'Gasto', cuenta: e ? e.cuenta : null, linea: t }); revisar++; }
   });
   LS.set('fin_detectados', det.slice(-40));

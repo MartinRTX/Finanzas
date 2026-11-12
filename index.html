@@ -460,6 +460,12 @@
   @media (prefers-reduced-motion: reduce) { .escuchando .rapido-bar .iconbtn, .escuchando .dictar-form { animation: none; } }
   @media (max-width: 360px) { .dona-wrap { grid-template-columns: 1fr; justify-items: center; } }
   @media (max-width: 360px) { .actgrid { grid-template-columns: 1fr 1fr; } .hero .big { font-size: 40px; } }
+  /* ¿Cómo voy a quedar? */
+  .flujo-g { width: 100%; height: auto; display: block; }
+  .flujo-g .linea { fill: none; stroke: var(--pri); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+  .flujo-g .cero { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 4 4; }
+  .flujo-g .bajo { fill: var(--sun); } .flujo-g .bajo.neg { fill: var(--debt); }
+  .fl .more { float: right; border: 0; background: none; color: var(--pri); font-weight: 650; font-size: 13px; padding: 0 2px; min-height: 0; text-transform: none; letter-spacing: 0; }
 </style>
 </head>
 <body>
@@ -500,5 +506,6 @@
 <script src="app.js"></script>
 <script src="extras.js"></script>
 <script src="rapido.js"></script>
+<script src="plan.js"></script>
 </body>
 </html>

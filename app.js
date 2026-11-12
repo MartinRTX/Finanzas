@@ -127,13 +127,13 @@ function haceCuanto(ts) {
   return h < 24 ? 'hace ' + h + ' h' : 'hace ' + Math.round(h / 24) + ' días';
 }
 let toastFn = null;
-function toast(msg, accion) {
+function toast(msg, accion, ms) {
   const t = $('toast');
   toastFn = accion ? accion.fn : null;
   t.innerHTML = '<span>' + esc(msg) + '</span>' + (accion ? '<button ' + al('click', 'usarToast') + '>' + esc(accion.txt) + '</button>' : '');
   t.className = 'toast show';
   clearTimeout(t._h);
-  t._h = setTimeout(() => { t.className = 'toast'; toastFn = null; }, accion ? 5500 : 2600);
+  t._h = setTimeout(() => { t.className = 'toast'; toastFn = null; }, ms || (accion ? 5500 : 2600));
 }
 function usarToast() { const f = toastFn; $('toast').className = 'toast'; toastFn = null; if (f) f(); }
 /* ----- App nativa (APK con Capacitor): mismos archivos; dentro del APK usa el motor háptico y notificaciones reales ----- */
@@ -192,7 +192,7 @@ const ARROW_L = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" str
 const ARROW_R = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
 
 /* ===================== Estado ===================== */
-const VERSION_APP = '7.4';
+const VERSION_APP = '8.0';
 let API = LS.get('fin_api', ''), KEY = LS.get('fin_key', ''), DEMO = LS.get('fin_demo', false);
 let BASE = null;      // lo último que mandó la hoja
 let DATA = null;      // BASE + cambios que aún no se suben
@@ -514,13 +514,11 @@ function comprasMSI(c) {
     return { m, pagadas, mensual: mensualidad(m), resta: r2(m.monto - mensualidad(m) * pagadas) };
   }).filter(x => x.pagadas < x.m.meses).sort((a, b) => (a.m.fecha < b.m.fecha ? 1 : -1));
 }
-// Mensualidades que el banco ya tiene programadas de compras a meses de antes de usar la app (la app no conoce esas compras).
-// Se capturan en Config → "Mensualidades anteriores": {"Nombre de la tarjeta": {"2026-12": 1004.01, ...}}, por mes de la fecha límite.
+// Pagos que el banco ya tiene programados en la tarjeta (compras a meses de antes y promociones de "paga después"),
+// por mes de la fecha límite. Salen de Config → "Pagos programados" (y del formato viejo "Mensualidades anteriores"); ver plan.js.
 function mensualidadesAnteriores(c) {
-  let t = null;
-  try { t = JSON.parse(DATA.config['Mensualidades anteriores'] || 'null'); } catch (e) {}
-  const m = t && typeof t === 'object' ? t[c.nombre] : null, out = {};
-  if (m && typeof m === 'object') Object.keys(m).forEach(mes => { const v = parseMonto(m[mes]); if (/^\d{4}-\d{2}$/.test(mes) && v > 0) out[mes] = r2(v); });
+  const out = {};
+  planesDe(c).forEach(p => Object.keys(p.pagos).forEach(mes => { out[mes] = r2((out[mes] || 0) + p.pagos[mes]); }));
   return out;
 }
 // Estado de cuenta que cerró en `k`: lo que debías al corte, sin lo que todavía no te cobran de compras a meses.
@@ -734,6 +732,7 @@ function avisos(r) {
       (c.domiciliado ? ' Está domiciliado desde ' + esc(c.domiciliado) + ': se registra solo.' : ' <button class="linkbtn" ' + al('click', 'pagarEstado', c.nombre) + '>Registrar pago</button>') });
   });
   activas().filter(c => c.tipo === 'Crédito' && uso(c) >= 90).forEach(c => lista.push({ p: 0, cls: 'red', h: '<b>' + esc(c.nombre) + ' está casi al tope:</b> usas ' + Math.round(uso(c)) + '% de tu límite. Te quedan ' + money(Math.max(0, c.limite + saldo(c)), true) + '.' }));
+  promesas().map(estadoPromesa).filter(e => e.atrasado > 0.5).forEach(e => lista.push({ p: 2, cls: '', h: '<b>' + esc(e.pr.persona) + '</b> quedó de pagarte ' + money(e.atrasado) + ' y va atrasado. <button class="linkbtn" ' + al('click', 'abrirPersona', e.pr.persona) + '>Ver</button>' }));
   const pasadas = [], cerca = [];
   catsGasto().forEach(c => {
     const n = netoCat(r, c.nombre), p = c.presupuesto || 0;
@@ -882,6 +881,7 @@ function vistaInicio() {
   // Plan de la quincena
   h += tarjetaQuincena(rq);
   h += tarjetaProximos();
+  h += tarjetaFlujo();
   h += tarjetaMetas();
 
   // Deuda (compacta)
@@ -1235,8 +1235,8 @@ function vistaCuentas() {
     '<div class="stat"><div class="muted">Disponible</div><div class="amt sm num">' + money(p.disp) + '</div></div>' +
     '<div class="stat"><div class="muted">Deuda con bancos</div><div class="amt sm red num">' + money(p.deuda) + '</div></div></div>';
   h += '<h2>Tus tarjetas<button class="more" ' + al('click', 'abrirPlan') + '>Plan de deuda</button></h2><div class="plastics" role="list">' + activas().filter(esDeuda).map(plastico).join('') + '</div>';
-  h += '<h2>Tu dinero</h2><div class="list">' + activas().filter(c => !esDeuda(c)).map(fila).join('') + '</div>';
-  h += '<p class="hint">Toca una cuenta para pagar, mover, cuadrar o ver su historial. Cuadra cada domingo.</p>';
+  h += '<h2>Tu dinero' + (fx('cuadrar') ? '<button class="more" ' + al('click', 'abrirCuadrarTodo') + '>Cuadrar todo</button>' : '') + '</h2><div class="list">' + activas().filter(c => !esDeuda(c)).map(fila).join('') + '</div>';
+  h += '<p class="hint">Toca una cuenta para pagar, mover, cuadrar o ver su historial. Cuadra cada domingo' + (fx('cuadrar') ? ' con "Cuadrar todo": escribes lo que dice cada banco y la app te dice qué falta' : '') + '.</p>';
   const ps = personasActivas().map(x => ({ x: x, s: saldoPersona(x) }));
   const teDeben = ps.filter(o => o.s > 0).sort((a, b) => b.s - a.s), lesDebes = ps.filter(o => o.s < 0).sort((a, b) => a.s - b.s), aMano = ps.filter(o => o.s === 0);
   h += '<h2 id="sec-personas">Te deben<span class="amt sm green num">' + money(p.teDeben) + '</span></h2>' +
@@ -1295,8 +1295,7 @@ function hojaDetalle() {
       '<div class="muted">Aproximado con lo que registras' + (c.domiciliado ? '. Domiciliado desde ' + esc(c.domiciliado) + ': se registra solo en la fecha límite' : '') + '.</div>' : '') + '</div>';
   if (deuda && c.limite) h += '<div class="card">' + htmlUso(c) + '</div>';
   const msi = deuda ? comprasMSI(c) : [];
-  const ant = deuda ? htmlMensualidadesAnteriores(c) : '';
-  if (ant) h += ant;
+  if (c.tipo === 'Crédito') h += htmlPagosProgramados(c);
   if (msi.length) h += '<div class="fl">Compras a meses</div><div class="card" style="padding:4px 16px">' + msi.map(x =>
     '<div class="qrow"><span>' + esc(x.m.desc || x.m.categoria) + '<br><span class="muted">' + x.pagadas + ' de ' + x.m.meses + ' mensualidades · ' + money(x.mensual) + ' al mes</span></span><b class="num">' + money(x.resta) + '</b></div>').join('') +
     '<div class="qrow tot"><span>Te faltan por pagar</span><b class="num">' + money(msi.reduce((t, x) => t + x.resta, 0)) + '</b></div></div>';
@@ -1309,24 +1308,6 @@ function hojaDetalle() {
   if (movs.length > 30) h += '<button class="btn ghost block" style="margin-top:10px" ' + al('click', 'buscarCuenta', c.nombre) + '>Ver todos</button>';
   h += '<div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
   return h;
-}
-
-// Calendario de mensualidades anteriores, juntando los meses seguidos con el mismo monto ("marzo – mayo 2027 · $362.53 al mes")
-function htmlMensualidadesAnteriores(c) {
-  const ant = mensualidadesAnteriores(c), ci = cicloTarjeta(c, hoy()), desde = ci ? ci.pago.slice(0, 7) : hoy().slice(0, 7);
-  const meses = Object.keys(ant).filter(mes => mes >= desde).sort();
-  if (!meses.length) return '';
-  const tramos = [];
-  meses.forEach(mes => {
-    const t = tramos[tramos.length - 1];
-    if (t && t.monto === ant[mes] && mesSig(t.hasta, 1) === mes) t.hasta = mes; else tramos.push({ desde: mes, hasta: mes, monto: ant[mes] });
-  });
-  const nombre = t => t.desde === t.hasta ? nombreMes(t.desde)
-    : MESES[+t.desde.slice(5, 7) - 1] + (t.desde.slice(0, 4) === t.hasta.slice(0, 4) ? '' : ' ' + t.desde.slice(0, 4)) + ' – ' + nombreMes(t.hasta);
-  return '<div class="fl">Pagos de compras anteriores</div><div class="card" style="padding:4px 16px">' + tramos.map(t =>
-    '<div class="qrow"><span>' + nombre(t) + (t.desde === t.hasta ? '' : '<br><span class="muted">' + money(t.monto) + ' al mes</span>') + '</span><b class="num">' + money(t.monto) + '</b></div>').join('') +
-    '<div class="qrow tot"><span>Te faltan por pagar</span><b class="num">' + money(meses.reduce((s, mes) => s + ant[mes], 0)) + '</b></div>' +
-    '<div class="muted" style="padding-bottom:8px">Lo que el banco ya tiene programado de compras a meses de antes. Ya está contado en el pago de cada mes.</div></div>';
 }
 
 /* ---- Guía de la primera vez ---- */
@@ -1383,7 +1364,8 @@ function cerrarHojaReal() {
 function pintarHoja() {
   if (!FORM) return;
   const f = { mov: hojaMov, cat: hojaCategoria, cuadrar: hojaCuadrar, cuenta: hojaCuenta, nuevaCuenta: hojaNuevaCuenta, persona: hojaPersona,
-              nuevaPersona: hojaNuevaPersona, fijo: hojaFijo, plan: hojaPlan, detalle: hojaDetalle, guia: hojaGuia, ajustes: hojaAjustes, meta: hojaMeta, catMes: hojaCatMes, ticket: hojaTicket, importar: hojaImportar, proximos: hojaProximos, alcanza: hojaAlcanza }[FORM.vista];
+              nuevaPersona: hojaNuevaPersona, fijo: hojaFijo, plan: hojaPlan, detalle: hojaDetalle, guia: hojaGuia, ajustes: hojaAjustes, meta: hojaMeta, catMes: hojaCatMes, ticket: hojaTicket, importar: hojaImportar, proximos: hojaProximos, alcanza: hojaAlcanza,
+              planPago: hojaPlanPago, promesa: hojaPromesa, cuadrarTodo: hojaCuadrarTodo, flujo: hojaFlujo, ingresoEsperado: hojaIngresoEsperado }[FORM.vista];
   const a = document.activeElement, foco = a && a.id, sel = a && a.selectionStart, top = $('sheet').scrollTop;
   $('sheet').innerHTML = '<div class="grabzone" id="grab"><div class="grab"></div></div>' + f();
   $('sheet').scrollTop = top;
@@ -1442,6 +1424,8 @@ function abrirFormMov(m) {
   FORM = { vista: 'mov', id: m.id, tipo: m.tipo, monto: String(m.monto), cuenta: m.cuenta, aCuenta: m.aCuenta || null, categoria: m.categoria || null,
            persona: m.persona || null, desc: m.desc || '', fecha: m.fecha, fijo: m.fijo || '', registrado: m.registrado || null, err: m._error ? 'La hoja lo rechazó: ' + m._error : '', verTodas: true,
            msi: esMSI(m), meses: m.meses || null, ticket: m.ticket || '' };
+  const pl = planDeMov(m.id);
+  if (pl) { const ms = Object.keys(pl.pagos).sort(); Object.assign(FORM, { despues: true, msi: false, despuesDesde: ms[0], despuesN: ms.length }); }
   abrirHoja(); pintarHoja(); enfocarTitulo();
 }
 function cuentasPara(tipo, rol) {
@@ -1600,8 +1584,9 @@ function hojaMov() {
     h += '<div class="fl">' + (t === 'Gasto' ? '¿Con qué pagaste?' : '¿A dónde llegó?') + '</div>' + chipsCuenta(cuentasPara(t), 'cuenta', 'Cuenta');
     const c = DATA.cuentas.find(x => x.nombre === FORM.cuenta), monto = parseMonto(FORM.monto);
     if (t === 'Gasto' && c && esDeuda(c)) h += htmlFinanciamiento(c, FORM.fecha, monto);
-    if (t === 'Gasto' && c && c.tipo === 'Crédito') h += htmlMSI(c, monto);
-    if (t === 'Gasto' && !ed && !(FORM.msi && c && c.tipo === 'Crédito')) h += htmlDividir(monto);
+    if (t === 'Gasto' && c && c.tipo === 'Crédito' && !FORM.despues) h += htmlMSI(c, monto);
+    if (t === 'Gasto' && c && c.tipo === 'Crédito' && !FORM.msi) h += htmlPagaDespues(c, monto);
+    if (t === 'Gasto' && !ed && !((FORM.msi || FORM.despues) && c && c.tipo === 'Crédito')) h += htmlDividir(monto);
   }
   const ph = { Gasto: 'Ej. Oxxo, gasolina Pemex', Ingreso: 'Ej. Quincena', Traspaso: 'Ej. Pago tarjeta', Reembolso: 'Ej. Aaron me pagó la pizza', Ajuste: '', 'Presté': 'Ej. Para la renta', 'Me pagaron': 'Ej. Abono', 'Me prestaron': '', 'Le pagué': '' }[t] || '';
   h += '<div class="fl"><label for="fDesc">Descripción</label></div><input id="fDesc" class="inp" maxlength="200" autocomplete="off" placeholder="' + ph + '" value="' + esc(FORM.desc) + '" ' + al('input', 'escribirDesc') + ' ' + al('focus', 'enfocarDesc') + ' ' + al('change', 'cambiarDesc') + '>' +
@@ -1690,7 +1675,7 @@ function guardarMovForm() {
     if (aviso) { FORM.confirmado = firma; FORM.err = aviso; pintarHoja(); vibrar([20, 40, 20]); return; }
   }
   if (nuevaPersona) encolar('guardarPersona', [{ nombre: nuevaPersona, saldoCorte: 0, fechaCorte: minCorte() || hoy(), nota: '' }], true);
-  if (t === 'Gasto' && nuevo && FORM.dividir && !usaMSI()) {
+  if (t === 'Gasto' && nuevo && FORM.dividir && !usaMSI() && !FORM.despues) {
     const pr = partesDividir(monto);
     if (pr.con.length) return guardarDividido(pr, monto);
   }
@@ -1701,9 +1686,12 @@ function guardarMovForm() {
   LS.set('fin_ult_cuenta_' + t, m.cuenta);
   if (t === 'Ingreso') LS.set('fin_ult_cat_Ingreso', m.categoria);
   FORM._guardado = true; LS.del('fin_draft');
+  const F = FORM;
   encolar('guardarMov', [m]);
+  sincronizarPlanMov(m, F);
   vibrar(15);
   cerrarHoja();
+  if (F.desdeCuadre) setTimeout(abrirCuadrarTodo, 350);
   const nombre = { Gasto: 'Gasto guardado', Ingreso: 'Ingreso guardado', Traspaso: 'Traspaso guardado', Reembolso: 'Reembolso guardado', Ajuste: 'Ajuste guardado' }[t] || 'Guardado';
   toast(nuevo ? nombre : 'Cambios guardados', nuevo ? { txt: 'Deshacer', fn: () => encolar('borrarMov', [m.id]) } : null);
 }
@@ -1730,9 +1718,11 @@ function borrarMovForm() {
   if (!m) return cerrarHoja();
   const copia = Object.assign({}, m); delete copia._pend;
   FORM._guardado = true;
+  const planes = planesPago(), suyo = planes.some(p => p.mov === m.id);
   encolar('borrarMov', [m.id]);
+  if (suyo) guardarPlanes(planes.filter(p => p.mov !== m.id));
   cerrarHoja();
-  toast('Movimiento eliminado', { txt: 'Deshacer', fn: () => encolar('guardarMov', [copia]) });
+  toast('Movimiento eliminado', { txt: 'Deshacer', fn: () => { encolar('guardarMov', [copia]); if (suyo) guardarPlanes(planes); } });
 }
 
 /* ---- Categoría: movimientos y presupuesto ---- */
@@ -1884,6 +1874,7 @@ function hojaPersona() {
   if (!p.archivada) h += '<div class="actgrid">' + (s >= 0
       ? '<button class="btn" ' + (s === 0 ? 'disabled' : '') + ' ' + al('click', 'abrirRegistro', { tipo: 'Me pagaron', persona: p.nombre }) + '>Me pagó</button><button class="btn ghost" ' + al('click', 'abrirRegistro', { tipo: 'Presté', persona: p.nombre }) + '>Le presté</button><button class="btn ghost" ' + al('click', 'abrirRegistro', { tipo: 'Me prestaron', persona: p.nombre }) + '>Me prestó</button>'
       : '<button class="btn" ' + al('click', 'abrirRegistro', { tipo: 'Le pagué', persona: p.nombre }) + '>Le pagué</button><button class="btn ghost" ' + al('click', 'abrirRegistro', { tipo: 'Me prestaron', persona: p.nombre }) + '>Me prestó más</button><button class="btn ghost" ' + al('click', 'abrirRegistro', { tipo: 'Presté', persona: p.nombre }) + '>Le presté</button>') + '</div>';
+  if (!p.archivada) h += htmlPromesas(p);
   h += '<div class="fl"><label for="fNom">Nombre</label></div><input id="fNom" class="inp" maxlength="40" value="' + esc(FORM.nuevo) + '" ' + al('input', 'campoForm', 'nuevo') + '>';
   h += '<div class="fl"><label for="fNota">Nota</label></div><input id="fNota" class="inp" maxlength="200" value="' + esc(FORM.nota) + '" ' + al('input', 'campoForm', 'nota') + '>';
   if (movs.length) h += '<div class="fl" style="margin-top:16px">Historial</div><div class="list">' + movs.map(filaMov).join('') + '</div>';

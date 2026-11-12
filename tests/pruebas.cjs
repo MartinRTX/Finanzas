@@ -166,7 +166,10 @@ async function inyeccion(b, base) {
     "SUB_ANALISIS='Tendencias';pintar()", "SUB_ANALISIS='Resumen';pintar()", "SUB_ANALISIS='Patrimonio';pintar()", "irA('Cuentas')", 'abrirDetalle(__X)', 'abrirCuenta(__X)', 'abrirCuadrar(__X)',
     'abrirPersona(__P)', 'abrirMeta(__M)', 'abrirFijo(__F)', 'editarMov(__MV)', 'abrirRegistro({})', 'abrirAjustes()', 'abrirAlcanza()', 'abrirProximos()',
     "agregarDetectados([{id:'x1',app:'com.bancomer.mbanking',texto:'Compra por $50.00 en '+__X+' con tu tarjeta',cuando:Date.now()}]);irA('Inicio')",
-    "abrirImportar(__X)", "prepararRevision([{fecha:hoy(),desc:__X,monto:-50}],__X)", "RAPIDO_TXT='230 '+__X;irA('Inicio')", 'toast(__X)'];
+    "abrirImportar(__X)", "prepararRevision([{fecha:hoy(),desc:__X,monto:-50}],__X)",
+    "DATA.config['Pagos programados']=JSON.stringify([{id:'p1',cuenta:__X,desc:__X,mov:'',pagos:{[mesSig(hoy().slice(0,7),1)]:100}}]);abrirDetalle(__X)", "abrirPlanPago(__X,'p1')",
+    "DATA.config['Promesas de pago']=JSON.stringify([{id:'q1',persona:__P,creada:hoy(),pagos:[{f:sumarDias(hoy(),2),m:10}]}]);abrirPersona(__P)", "abrirPromesa(__P,'q1')",
+    "DATA.config['Ingresos esperados']=JSON.stringify([{id:'i1',f:sumarDias(hoy(),3),m:50,d:__X}]);abrirFlujo()", 'abrirCuadrarTodo()', 'abrirProximos()', "RAPIDO_TXT='230 '+__X;irA('Inicio')", 'toast(__X)'];
   const fugas = [];
   for (const s of pasos) {
     try { await p.evaluate(s); } catch (e) { ok(false, 'paso ' + s, e.message); }
@@ -208,7 +211,7 @@ async function botones(b, base) {
   console.log('• Botones (sin código en el HTML, con CSP estricta)');
   const p = await nuevaPagina(b, base);
   // Todas las acciones escritas en el código existen como funciones de la app
-  const fuente = ['index.html', 'app.js', 'extras.js', 'rapido.js'].map(f => fs.readFileSync(path.join(RAIZ, f), 'utf8')).join('\n');
+  const fuente = ['index.html', 'app.js', 'extras.js', 'rapido.js', 'plan.js'].map(f => fs.readFileSync(path.join(RAIZ, f), 'utf8')).join('\n');
   const enLinea = fuente.match(/\son[a-z]+\s*=\s*\\?["']/gi);
   ok(!enLinea, 'el código no escribe atributos onclick, onmousedown, etc.', enLinea);
   const nombres = new Set([...fuente.matchAll(/al\('(?:click|input|change|keydown|focus|mousedown)', '(\w+)'/g)].map(m => m[1]).concat([...fuente.matchAll(/data-click="(\w+)"/g)].map(m => m[1]), ['detalleMes', 'detalleCatMes']));  // las de la gráfica llegan por variable
@@ -223,7 +226,8 @@ async function botones(b, base) {
   }
   for (const js of ['abrirRegistro({})', "abrirRegistro({tipo:'Traspaso'})", 'abrirAjustes()', 'abrirAlcanza()', 'abrirProximos()', "abrirImportar('Revolut')", 'abrirMeta()', "abrirMeta(DATA.metas[0]&&DATA.metas[0].id)",
     "abrirDetalle('BBVA Oro')", "abrirCuenta('BBVA Oro')", 'abrirNuevaCuenta()', 'abrirNuevaPersona()', 'abrirPersona(DATA.personas[0].nombre)', 'abrirFijo()', 'abrirFijo(DATA.fijos[0].id)',
-    'abrirPlan()', 'abrirHojaTicket()', 'abrirGuia()', "abrirCuadrar('BBVA Oro')", "abrirCategoria(DATA.categorias[0].nombre)"]) {
+    'abrirPlan()', 'abrirHojaTicket()', 'abrirGuia()', "abrirCuadrar('BBVA Oro')", "abrirCategoria(DATA.categorias[0].nombre)",
+    'abrirCuadrarTodo()', 'abrirFlujo()', "abrirPlanPago('BBVA Oro', '')", "abrirPromesa('Aaron', '')", 'abrirIngresoEsperado()', "abrirRegistro({tipo:'Gasto',cuenta:'BBVA Oro'});alternarPagaDespues()"]) {
     try { await p.evaluate(js); } catch (e) { malos.push(js + ': ' + e.message); continue; }
     await p.waitForTimeout(60); malos.push(...(await revisarAcciones(p)).map(m => js + ' → ' + m));
     await p.evaluate(() => cerrarHojaReal()); await p.waitForTimeout(260);
@@ -336,9 +340,130 @@ async function tarjetas(b, base) {
   });
   ok(Math.abs(r.despues.total - Math.max(0, r.antes.total - 800)) < 0.01, 'las mensualidades de meses que vienen no se cobran en este estado de cuenta', [r.antes.total, r.despues.total]);
   ok(Math.abs(r.despues.msi - r.antes.msi - 100) < 0.01, 'la de este mes cuenta como mensualidad', [r.antes.msi, r.despues.msi]);
-  ok(/Pagos de compras anteriores/.test(r.html) && /al mes/.test(r.html) && !/<img>/.test(r.html), 'la tarjeta muestra el calendario juntando meses iguales y sin HTML ajeno');
+  ok(/Pagos programados/.test(r.html) && /al mes/.test(r.html) && !/<img>/.test(r.html), 'la tarjeta muestra el calendario juntando meses iguales y sin HTML ajeno');
   ok(Math.abs(r.roto.total - r.antes.total) < 0.01, 'un calendario mal escrito no rompe nada');
   ok(p.errores.length === 0, 'tarjetas sin errores', p.errores);
+  await p.context().close();
+}
+
+async function voz(b, base) {
+  console.log('• Voz y barra rápida: varias cosas en una frase y preguntas');
+  const p = await nuevaPagina(b, base);
+  const r = await p.evaluate(() => {
+    const ayer = sumarDias(hoy(), -1), corto = l => l.map(e => [e.monto, e.cuenta, e.fecha, e.categoria, e.tipo]);
+    return {
+      dos: corto(entenderVarias('gasté 230 en oxxo y 120 de tacos con débito ayer')), ayer,
+      palabras: corto(entenderVarias('doscientos treinta y cinco en oxxo')),
+      sinPartir: corto(entenderVarias('tacos y refresco 120')),
+      coma: corto(entenderVarias('85 café, 40 pan, 300 gasolina')),
+      rend: corto(entenderVarias('rendimientos 44.50 revolut')),
+      centavos: corto(entenderVarias('230 con 50 centavos en oxxo')),
+      prestamos: entenderVarias('le presté 500 a Aaron y 300 a Lore').map(e => [e.tipo, e.persona, e.monto, e.ok]),
+    };
+  });
+  ok(r.dos.length === 2 && r.dos[0][0] === 230 && r.dos[1][0] === 120, 'dos movimientos en una frase', r.dos);
+  ok(r.dos.every(x => x[1] === 'BBVA Débito' && x[2] === r.ayer), 'la cuenta y la fecha que dices una vez valen para los dos', r.dos);
+  ok(r.palabras.length === 1 && r.palabras[0][0] === 235, '"treinta y cinco" no se parte en dos', r.palabras);
+  ok(r.sinPartir.length === 1 && r.sinPartir[0][0] === 120, 'sin monto en un lado no se parte', r.sinPartir);
+  ok(r.coma.length === 3 && r.coma[2][3] === 'Gasolina', 'lista con comas', r.coma);
+  ok(r.rend.length === 1 && r.rend[0][4] === 'Ingreso' && r.rend[0][3] === 'Rendimientos' && r.rend[0][1] === 'Revolut', 'rendimientos como ingreso', r.rend);
+  ok(r.centavos[0] && r.centavos[0][0] === 230.5, '"230 con 50 centavos"', r.centavos);
+  ok(r.prestamos.length === 2 && r.prestamos[1][0] === 'Presté' && r.prestamos[1][1] === 'Lore' && r.prestamos[1][2] === 300 && r.prestamos[1][3], 'el segundo préstamo también es préstamo', r.prestamos);
+  // Guardar varias desde la barra
+  const g = await p.evaluate(() => { const n = DATA.movs.length; RAPIDO_TXT = '85 café y 40 pan con débito'; enviarRapido(); return { nuevos: DATA.movs.length - n, barra: RAPIDO_TXT }; });
+  ok(g.nuevos === 2 && g.barra === '', 'Enter guarda los dos', g);
+  const parcial = await p.evaluate(() => { const n = DATA.movs.length; RAPIDO_TXT = '85 café y 200'; enviarRapido(); return { nuevos: DATA.movs.length - n, barra: RAPIDO_TXT }; });
+  ok(parcial.nuevos >= 1 && parcial.barra.length >= 0, 'guarda lo completo y deja lo demás en la barra', parcial);
+  // Preguntas por voz
+  const q = await p.evaluate(() => {
+    const t = () => $('toast').innerText;
+    const res = {};
+    res.queda = comandoVoz('¿Cuánto me queda?') && t();
+    res.debe = comandoVoz('cuánto me debe Aaron') && t();
+    res.deuda = comandoVoz('cuánto debo') && t();
+    res.comida = comandoVoz('cuánto llevo en comida') && t();
+    res.noEs = comandoVoz('230 en oxxo');
+    res.ultimo = comandoVoz('borra el último') && FORM && FORM.vista === 'mov' && !!FORM.id;
+    cerrarHojaReal();
+    return res;
+  });
+  ok(/quincena/.test(q.queda), 'pregunta: cuánto me queda', q.queda);
+  ok(/Aaron te debe/.test(q.debe), 'pregunta: cuánto me debe Aaron', q.debe);
+  ok(/Debes/.test(q.deuda) && /Comida/.test(q.comida), 'preguntas de deuda y categoría', [q.deuda, q.comida]);
+  ok(q.noEs === false && q.ultimo === true, 'un gasto no es pregunta; "borra el último" abre el último', q);
+  ok(p.errores.length === 0, 'voz sin errores', p.errores);
+  await p.context().close();
+}
+
+async function planear(b, base) {
+  console.log('• Planear: pagos programados, promesas, Cuadrar todo y ¿Cómo voy a quedar?');
+  const p = await nuevaPagina(b, base);
+  // Pagos programados: el formato viejo se muestra, se migra al editarlo y cambia el pago del mes
+  const pl = await p.evaluate(() => {
+    const c = DATA.cuentas.find(x => x.nombre === 'BBVA Oro'), k = ultimoCorte(c), pm = cicloTarjeta(c, k).pago.slice(0, 7);
+    const antes = estadoCuenta(c, k).total;
+    DATA.config['Mensualidades anteriores'] = JSON.stringify({ 'BBVA Oro': { [mesSig(pm, 1)]: 300, [mesSig(pm, 2)]: 300 } });
+    const conLegado = estadoCuenta(c, k).total;
+    abrirPlanPago('BBVA Oro', 'legado');
+    const migrado = { planes: planesPago().length, legado: JSON.parse(DATA.config['Mensualidades anteriores'])['BBVA Oro'] === undefined, vista: FORM.vista, filas: FORM.filas.length };
+    cerrarHojaReal();
+    abrirPlanPago('BBVA Oro', ''); FORM.desc = 'Título'; FORM.total = '17000'; FORM.n = 3; FORM.desde = mesSig(pm, 3); guardarPlanPago(); cerrarHojaReal();
+    const titulo = planesPago().find(x => x.desc === 'Título');
+    return { antes, conLegado, migrado, titulo: titulo && Object.values(titulo.pagos), despues: estadoCuenta(c, k).total };
+  });
+  ok(Math.abs(pl.conLegado - Math.max(0, pl.antes - 600)) < 0.01, 'el calendario viejo sigue contando', pl);
+  ok(pl.migrado.planes === 1 && pl.migrado.legado && pl.migrado.filas === 2, 'al editarlo pasa a "Pagos programados"', pl.migrado);
+  ok(pl.titulo && pl.titulo.length === 3 && Math.abs(pl.titulo.reduce((a, v) => a + v, 0) - 17000) < 0.01, 'un plan nuevo reparte el total en sus meses', pl.titulo);
+  // Compra hoy, paga después desde el formulario; al borrar el gasto se va su plan
+  const pd = await p.evaluate(() => {
+    LS.del('fin_draft'); abrirRegistro({ tipo: 'Gasto', cuenta: 'BBVA Oro' }); $('fMonto').value = '9000'; $('fDesc').value = 'Promo marzo'; FORM.categoria = 'Otros';
+    alternarPagaDespues(); FORM.despuesDesde = mesSig(hoy().slice(0, 7), 4); FORM.despuesN = 3; guardarMovForm();
+    const m = DATA.movs.find(x => x.desc === 'Promo marzo'), plan = m && planDeMov(m.id);
+    editarMov(m.id); const reabre = FORM.despues === true && FORM.despuesN === 3; borrarMovForm();
+    return { plan: plan && Object.keys(plan.pagos).length, meses: m && m.meses, reabre, quedo: !!planDeMov(m.id) };
+  });
+  ok(pd.plan === 3 && !pd.meses && pd.reabre && !pd.quedo, 'paga después: crea el plan, se reabre igual y se borra con el gasto', pd);
+  // Promesas de pago
+  const pr = await p.evaluate(() => {
+    abrirPromesa('Aaron', ''); FORM.monto = '1000'; FORM.primera = sumarDias(hoy(), 3); FORM.frec = 'catorcena'; FORM.n = '3'; guardarPromesa(); cerrarHojaReal();
+    const e1 = estadoPromesa(promesas()[0]), cobros = cobrosEsperados().length;
+    encolar('guardarMov', [{ id: 'pago-aaron', fecha: hoy(), tipo: 'Me pagaron', monto: 1000, cuenta: 'BBVA Débito', aCuenta: '', categoria: '', desc: 'Abono', registrado: Date.now(), persona: 'Aaron', fijo: '' }], true);
+    const e2 = estadoPromesa(promesas()[0]);
+    abrirPersona('Aaron'); const html = $('sheet').innerHTML; cerrarHojaReal();
+    return { n: e1.items.length, pendiente1: e1.pendiente, cobros, hecho: e2.items[0].hecho, pendiente2: e2.pendiente, html: /Promesa de pago/.test(html) && /pagado/.test(html) };
+  });
+  ok(pr.n === 3 && pr.pendiente1 === 3000 && pr.cobros === 3, 'promesa: 3 pagos de $1,000 cada catorcena', pr);
+  ok(pr.hecho && pr.pendiente2 === 2000 && pr.html, 'un abono cubre el primer pago', pr);
+  // Cuadrar todo: un traspaso que no registraste y rendimientos
+  const cq = await p.evaluate(() => {
+    abrirCuadrarTodo();
+    const deb = saldo(DATA.cuentas.find(c => c.nombre === 'BBVA Débito')), rev = saldo(DATA.cuentas.find(c => c.nombre === 'Revolut'));
+    FORM.reales['BBVA Débito'] = String(r2(deb - 500)); FORM.reales['Revolut'] = String(r2(rev + 500)); FORM.reales['Efectivo'] = String(r2(saldo(DATA.cuentas.find(c => c.nombre === 'Efectivo')) + 3.5));
+    pintarHoja();
+    const html = $('sheet').innerHTML, sug = sugerenciasCuadre(DATA.cuentas.find(c => c.nombre === 'BBVA Débito'), -500, difsActuales()).map(x => x.t);
+    const i = sugerenciasCuadre(DATA.cuentas.find(c => c.nombre === 'BBVA Débito'), -500, difsActuales()).findIndex(x => /Traspaso/.test(x.t));
+    aplicarSugerencia('BBVA Débito', i);
+    const tras = difsActuales().map(x => x.c.nombre);
+    const j = sugerenciasCuadre(DATA.cuentas.find(c => c.nombre === 'Efectivo'), 3.5, difsActuales()).findIndex(x => x.t === 'Rendimientos');
+    aplicarSugerencia('Efectivo', j);
+    const fin = difsActuales().length; cerrarHojaReal();
+    return { sug, quedan: tras, fin, html: /Diferencias/.test(html) };
+  });
+  ok(cq.html && cq.sug.some(t => /Traspaso de BBVA Débito a Revolut/.test(t)), 'Cuadrar todo encuentra el traspaso entre tus cuentas', cq.sug);
+  ok(cq.quedan.join() === 'Efectivo' && cq.fin === 0, 'con dos toques todo queda cuadrado', cq);
+  // ¿Cómo voy a quedar?
+  const fl = await p.evaluate(() => {
+    const hasta = fechaFlujo('3m'), r = flujo(hasta);
+    const suma = r2(r.inicio + r.ev.reduce((s, e) => s + e.monto, 0) - r.vivir);
+    abrirFlujo(); const html = $('sheet').innerHTML; elegirFlujo('6m'); const html6 = $('sheet').innerHTML; cerrarHojaReal();
+    irA('Inicio'); const inicio = /Cómo voy a quedar/.test($('view').innerHTML);
+    return { cuadra: Math.abs(suma - r.final) < 0.05, final: r.final, bajo: r.bajo, tarjetas: r.tarjetas, ingresos: r.ingresos, promesas: r.promesas, n: r.ev.length,
+             html: /tendrías/.test(html) && /<svg/.test(html), html6: /tendrías/.test(html6), inicio, quincenas: r.ev.filter(e => e.grupo === 'ingreso').length };
+  });
+  ok(fl.cuadra && isFinite(fl.final) && fl.bajo.s <= fl.final + 0.01, '¿Cómo voy a quedar? suma bien', fl);
+  ok(fl.tarjetas < 0 && fl.ingresos > 0 && fl.promesas > 0 && fl.quincenas >= 5, 'cuenta tarjetas, quincenas y lo prometido', fl);
+  ok(fl.html && fl.html6 && fl.inicio, 'la hoja y la tarjeta de Inicio se muestran', fl);
+  ok(p.errores.length === 0, 'planear sin errores', p.errores);
   await p.context().close();
 }
 
@@ -366,7 +491,7 @@ async function importar(b, base) {
   const s = await servidor(), base = 'http://127.0.0.1:' + s.address().port;
   const b = await chromium.launch();
   try {
-    for (const prueba of [parser, humo, formulario, inyeccion, botones, apk, tarjetas, importar]) await prueba(b, base);
+    for (const prueba of [parser, humo, formulario, inyeccion, botones, apk, tarjetas, voz, planear, importar]) await prueba(b, base);
   } catch (e) { ok(false, 'la prueba se cayó', e.message); }
   await b.close(); s.close();
   console.log('\n' + pasaron + ' revisiones pasaron, ' + fallas.length + ' fallaron.');
