@@ -458,7 +458,7 @@ function vistaResumen() {
   if (R.peor) lo.push('👀 <b>' + esc(R.peor.c) + '</b> subió ' + money(R.peor.d, true) + '.');
   if (R.pres && x.gasto <= R.pres) lo.push('✅ Cerraste dentro de tu presupuesto.');
   else if (R.pres) lo.push('⚠️ Te pasaste ' + money(x.gasto - R.pres, true) + ' del presupuesto.');
-  metasActivas().forEach(m => lo.push((m.icono || '🎯') + ' ' + esc(m.nombre) + ': llevas ' + Math.round((m.apartado || 0) / m.objetivo * 100) + '%.'));
+  metasActivas().forEach(m => lo.push(esc(m.icono || '🎯') + ' ' + esc(m.nombre) + ': llevas ' + Math.round((m.apartado || 0) / m.objetivo * 100) + '%.'));
   if (lo.length) h += '<div class="card"><div class="t1">Lo que destaca</div><ul class="ideas">' + lo.map(l => '<li>' + l + '</li>').join('') + '</ul></div>';
   if (R.gastos.length) h += '<div class="card"><div class="t1">Tus 5 gastos más grandes</div>' + R.gastos.slice(0, 5).map(g => '<div class="qrow"><span>' + emo(ICONO[g.categoria]) + esc(g.desc || g.categoria) + ' <span class="muted">' + fechaCorta(g.fecha) + '</span></span><b class="num">' + money(g.monto, true) + '</b></div>').join('') + '</div>';
   // Correo
@@ -508,7 +508,7 @@ function eventosProximos(dias) {
       add(fecha, f.tipo === 'Ingreso' ? '💰' : f.tipo === 'Traspaso' ? '🏦' : emo(ICONO[f.categoria]).replace(/<[^>]+>/g, '').trim() || '📌', f.nombre, f.monto, f.tipo === 'Ingreso' ? 'in' : 'out', al('click', 'usarFijo', f.id));
     }
   });
-  metasActivas().filter(m => m.fecha).forEach(m => add(m.fecha, m.icono || '🎯', 'Meta: ' + m.nombre, Math.max(0, m.objetivo - (m.apartado || 0)), 'tr', al('click', 'abrirMeta', m.id)));
+  metasActivas().filter(m => m.fecha).forEach(m => add(m.fecha, esc(m.icono || '🎯'), 'Meta: ' + m.nombre, Math.max(0, m.objetivo - (m.apartado || 0)), 'tr', al('click', 'abrirMeta', m.id)));
   return ev.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
 }
 function filaEvento(e) {

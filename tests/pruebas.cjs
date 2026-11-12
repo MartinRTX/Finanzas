@@ -167,7 +167,14 @@ async function inyeccion(b, base) {
     'abrirPersona(__P)', 'abrirMeta(__M)', 'abrirFijo(__F)', 'editarMov(__MV)', 'abrirRegistro({})', 'abrirAjustes()', 'abrirAlcanza()', 'abrirProximos()',
     "agregarDetectados([{id:'x1',app:'com.bancomer.mbanking',texto:'Compra por $50.00 en '+__X+' con tu tarjeta',cuando:Date.now()}]);irA('Inicio')",
     "abrirImportar(__X)", "prepararRevision([{fecha:hoy(),desc:__X,monto:-50}],__X)", "RAPIDO_TXT='230 '+__X;irA('Inicio')", 'toast(__X)'];
-  for (const s of pasos) { try { await p.evaluate(s); } catch (e) { ok(false, 'paso ' + s, e.message); } await p.waitForTimeout(60); }
+  const fugas = [];
+  for (const s of pasos) {
+    try { await p.evaluate(s); } catch (e) { ok(false, 'paso ' + s, e.message); }
+    await p.waitForTimeout(60);
+    // Un nombre con HTML nunca debe convertirse en elemento (aunque la CSP lo bloquee)
+    if (await p.evaluate(() => [...document.querySelectorAll('*')].some(e => [...e.attributes].some(a => /^on/i.test(a.name))))) fugas.push(s);
+  }
+  ok(fugas.length === 0, 'ningún nombre se pinta como HTML', fugas);
   // Tocar los botones que llevan el nombre malicioso: abren lo correcto y no ejecutan nada
   await p.evaluate(() => { cerrarHojaReal(); irA('Cuentas'); }); await p.waitForTimeout(300);
   await p.locator('[data-click="abrirDetalle"]').filter({ hasText: 'pwned' }).first().click(); await p.waitForTimeout(120);
@@ -313,6 +320,28 @@ async function apk(b, base) {
   await q.context().close();
 }
 
+async function tarjetas(b, base) {
+  console.log('• Tarjetas: mensualidades anteriores (compras a meses de antes de la app)');
+  const p = await nuevaPagina(b, base);
+  const r = await p.evaluate(() => {
+    const c = DATA.cuentas.find(x => x.nombre === 'BBVA Oro'), k = ultimoCorte(c), pm = cicloTarjeta(c, k).pago.slice(0, 7);
+    const antes = estadoCuenta(c, k);
+    DATA.config['Mensualidades anteriores'] = JSON.stringify({ 'BBVA Oro': { [pm]: 100, [mesSig(pm, 1)]: 300, [mesSig(pm, 2)]: 300, [mesSig(pm, 3)]: 200, 'mal': 5, [mesSig(pm, 4)]: '<img>' } });
+    const despues = estadoCuenta(c, k);
+    abrirDetalle('BBVA Oro');
+    const html = $('sheet').innerHTML;
+    DATA.config['Mensualidades anteriores'] = '{roto';
+    const roto = estadoCuenta(c, k);
+    return { antes, despues, html, roto };
+  });
+  ok(Math.abs(r.despues.total - Math.max(0, r.antes.total - 800)) < 0.01, 'las mensualidades de meses que vienen no se cobran en este estado de cuenta', [r.antes.total, r.despues.total]);
+  ok(Math.abs(r.despues.msi - r.antes.msi - 100) < 0.01, 'la de este mes cuenta como mensualidad', [r.antes.msi, r.despues.msi]);
+  ok(/Pagos de compras anteriores/.test(r.html) && /al mes/.test(r.html) && !/<img>/.test(r.html), 'la tarjeta muestra el calendario juntando meses iguales y sin HTML ajeno');
+  ok(Math.abs(r.roto.total - r.antes.total) < 0.01, 'un calendario mal escrito no rompe nada');
+  ok(p.errores.length === 0, 'tarjetas sin errores', p.errores);
+  await p.context().close();
+}
+
 async function importar(b, base) {
   console.log('• Importar estado de cuenta (CSV de Revolut)');
   const p = await nuevaPagina(b, base);
@@ -337,7 +366,7 @@ async function importar(b, base) {
   const s = await servidor(), base = 'http://127.0.0.1:' + s.address().port;
   const b = await chromium.launch();
   try {
-    for (const prueba of [parser, humo, formulario, inyeccion, botones, apk, importar]) await prueba(b, base);
+    for (const prueba of [parser, humo, formulario, inyeccion, botones, apk, tarjetas, importar]) await prueba(b, base);
   } catch (e) { ok(false, 'la prueba se cayó', e.message); }
   await b.close(); s.close();
   console.log('\n' + pasaron + ' revisiones pasaron, ' + fallas.length + ' fallaron.');
