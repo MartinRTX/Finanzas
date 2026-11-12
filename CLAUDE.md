@@ -30,14 +30,16 @@ y APK de Android (Capacitor) que carga esa misma página. Los datos viven en una
 
 ## Estructura
 
-- `index.html` (estilos y esqueleto), `app.js` (núcleo), `extras.js` (módulos v6), `rapido.js` (registro rápido v7).
+- `index.html` (estilos y esqueleto), `app.js` (núcleo), `extras.js` (módulos v6), `rapido.js` (registro rápido y voz),
+  `plan.js` (v8: pagos programados, promesas de pago, Cuadrar todo y ¿Cómo voy a quedar?).
 - Botones: **nunca** `onclick="…"` ni otro atributo `on*` (la CSP es `script-src 'self'` y los bloquea). Se escribe
   `al('click', 'nombreFuncion', arg1, …)` (también `input`, `change`, `keydown`, `focus`, `mousedown`); la función debe ser
   una `function` global, recibe los argumentos (JSON) con `this` = el elemento y `EVENTO` = el evento. `tema.js` va aparte
   por la misma razón. La prueba "Botones" revisa que cada acción exista.
-- Tarjetas con compras a meses de antes de usar la app: el calendario va en la hoja Config, clave
-  `Mensualidades anteriores`, como JSON `{"Nombre de la tarjeta": {"2026-12": 1004.01, ...}}` (mes de la fecha límite).
-  `estadoCuenta` no cobra los meses que vienen y la hoja de la tarjeta muestra el calendario.
+- Datos de `plan.js` en la hoja Config (JSON, sin tocar el Apps Script): `Pagos programados` (planes por tarjeta:
+  compras a meses de antes y promociones "paga después", por mes de fecha límite; `estadoCuenta` no cobra los meses que
+  vienen), `Promesas de pago` (por persona) e `Ingresos esperados`. `Mensualidades anteriores` es el formato viejo:
+  se sigue leyendo y pasa a `Pagos programados` cuando se edita desde la app.
 - `sw.js`: al publicar cambios de la app, subir `VERSION` (y `VERSION_APP` en `app.js`) para que los celulares actualicen.
 - `apk/`: cascarón Capacitor; `apk/native/java` (plugin, widgets, notificaciones, lector), `apk/res` (íconos y layouts),
   `apk/native/manifest-application.xml` (lo que se inserta en el manifiesto; el bloque `<!--LECTOR-->` se quita en la variante ligera).

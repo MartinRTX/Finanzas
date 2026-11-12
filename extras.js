@@ -12,6 +12,8 @@ const FUNCIONES = [
   ['proximos', '⏰', 'Próximos pagos', 'Tarjetas, cortes, fijos y quincenas de los próximos 30 días.'],
   ['hormiga', '🐜', 'Gastos hormiga', 'Cuánto se te va en gastos chiquitos que se repiten.'],
   ['alcanza', '🤔', '¿Me alcanza?', 'Antes de una compra grande: cómo queda tu presupuesto, tu tarjeta y tus metas.'],
+  ['cuadrar', '⚖️', 'Cuadrar todo', 'Escribes lo que dice cada banco y la app encuentra qué falta: traspasos, fijos, compras detectadas, abonos o rendimientos.'],
+  ['flujo', '📆', '¿Cómo voy a quedar?', 'Tu dinero día por día hasta la fecha que elijas: quincenas, pagos de tarjetas, fijos, cobros y tu gasto diario.'],
   ['widget', '🧩', 'Widget de inicio', 'Lo que te queda de la quincena en tu pantalla de inicio, con botones + y Ticket.', 'apk'],
   ['lector', '🔔', 'Gastos de tus notificaciones', 'Detecta tus compras en las notificaciones de BBVA, Revolut, Mercado Pago y Nu para registrarlas con un toque.', 'apk'],
 ];
@@ -37,6 +39,8 @@ function htmlFunciones() {
 function accionesRapidas() {
   const a = [];
   if (fx('ticket')) a.push(['📷', 'Ticket', al('click', 'abrirHojaTicket')]);
+  if (fx('flujo')) a.push(['📆', '¿Cómo voy?', al('click', 'abrirFlujo')]);
+  if (fx('cuadrar')) a.push(['⚖️', 'Cuadrar', al('click', 'abrirCuadrarTodo')]);
   if (fx('alcanza')) a.push(['🤔', '¿Me alcanza?', al('click', 'abrirAlcanza')]);
   if (fx('importar')) a.push(['📄', 'Importar', al('click', 'abrirImportar')]);
   if (fx('resumen')) a.push(['🗓️', 'Resumen', al('click', 'irAnalisis', 'Resumen')]);
@@ -508,6 +512,8 @@ function eventosProximos(dias) {
       add(fecha, f.tipo === 'Ingreso' ? '💰' : f.tipo === 'Traspaso' ? '🏦' : emo(ICONO[f.categoria]).replace(/<[^>]+>/g, '').trim() || '📌', f.nombre, f.monto, f.tipo === 'Ingreso' ? 'in' : 'out', al('click', 'usarFijo', f.id));
     }
   });
+  cobrosEsperados().forEach(x => add(x.fecha, '🤝', x.persona + ' te paga', x.monto, 'in', al('click', 'abrirPersona', x.persona)));
+  ingresosEsperados().forEach(x => add(x.f, '🎁', x.d, x.m, 'in', al('click', 'abrirFlujo')));
   metasActivas().filter(m => m.fecha).forEach(m => add(m.fecha, esc(m.icono || '🎯'), 'Meta: ' + m.nombre, Math.max(0, m.objetivo - (m.apartado || 0)), 'tr', al('click', 'abrirMeta', m.id)));
   return ev.sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
 }
@@ -527,7 +533,7 @@ function hojaProximos() {
   const ev = eventosProximos(30), sale = ev.filter(e => e.cls === 'out' && e.monto).reduce((t, e) => t + e.monto, 0), entra = ev.filter(e => e.cls === 'in' && e.monto).reduce((t, e) => t + e.monto, 0);
   return titulo('Próximos 30 días') + '<div class="grid2" style="margin-bottom:12px"><div class="stat"><div class="muted">Por pagar</div><div class="amt sm num red">' + money(sale, true) + '</div></div><div class="stat"><div class="muted">Por recibir</div><div class="amt sm num green">' + money(entra, true) + '</div></div></div>' +
     (ev.length ? '<div class="list">' + ev.map(filaEvento).join('') + '</div>' : '<div class="list"><div class="empty">Nada en los próximos 30 días.</div></div>') +
-    '<p class="hint">Incluye fechas límite de tus tarjetas (con el pago para no generar intereses), cortes, pagos fijos con día y fechas de tus metas.</p><div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
+    '<p class="hint">Incluye fechas límite de tus tarjetas (con el pago para no generar intereses), cortes, pagos fijos con día, lo que te prometieron pagar, ingresos extra que esperas y fechas de tus metas.</p><div class="actbar"><button class="btn ghost" ' + al('click', 'cerrarHoja') + '>Cerrar</button></div>';
 }
 
 /* ===================== Gastos hormiga ===================== */
